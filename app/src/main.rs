@@ -18,9 +18,23 @@ async fn count_records(req: Request<Client>) -> tide::Result<String>{
     Ok(format!("Number of records in the last second: {}", count))
 }
 
+
+async fn cleanup_records(req: Request<Client>) -> tide::Result<String>{
+    let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis();
+    let two_seconds_ago = now - 2000;
+
+    let redis_client = req.state();
+    let mut con = redis_client.get_async_connection().await.unwrap();
+
+    let removed: isize = con.zrembyscore("timestamps", 0, two_seconds_ago as f64).await.unwrap();
+    
+    Ok(format!("Removed {} records order than 2 seconds", removed))
+}
+
 async fn run_server(redis_client: Client) -> tide::Result<()>{
     let mut app = Server::with_state(redis_client);
-    app.at("/").get(count_records);
+    app.at("/count").get(count_records);
+    app.at("/cleanup").get(cleanup_records);
     app.listen("0.0.0.0:8080").await?;
     Ok(())
 }
