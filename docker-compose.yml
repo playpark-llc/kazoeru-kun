@@ -2,23 +2,19 @@ version: "3"
 services:
   front:
     build: ./app/frontend
-    command: sh -c "pnpm start"
     tty: true
     volumes:
       - ./app/frontend:/opt/app/frontend
       - pnpm_store_frontend:/opt/app/frontend/.pnpm-store
-    working_dir: /opt/app/frontend
     ports:
       - 3000:3000
     depends_on:
       - back
   back:
     build: ./app/backend
-    command: sh -c "cargo run"
     tty: true
     volumes:
       - ./app/backend:/opt/app/backend
-    working_dir: /opt/app/backend
     ports:
       - 8080:8080
     depends_on:
