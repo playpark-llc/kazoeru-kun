@@ -1,5 +1,7 @@
 use async_std::task;
 use tide::{Request, Server};
+use tide::http::headers::HeaderValue;
+use tide::security::{CorsMiddleware, Origin};
 use redis::{AsyncCommands, Client};
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -33,8 +35,17 @@ async fn cleanup_records(req: Request<Client>) -> tide::Result<String>{
 
 async fn run_server(redis_client: Client) -> tide::Result<()>{
     let mut app = Server::with_state(redis_client);
+    
+    let cors = CorsMiddleware::new()
+        .allow_methods("GET, POST, OPTIONS".parse::<HeaderValue>().unwrap())
+        .allow_origin(Origin::from("http://localhost:3000"))
+        .allow_credentials(false);
+
+    app.with(cors);
+
     app.at("/count").get(count_records);
     app.at("/cleanup").get(cleanup_records);
+
     app.listen("0.0.0.0:8080").await?;
     Ok(())
 }

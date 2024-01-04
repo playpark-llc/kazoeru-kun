@@ -1,2 +1,3 @@
-target
+app/backend/target
+app/frontend/node_modules
 data
