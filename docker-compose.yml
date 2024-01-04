@@ -27,5 +27,8 @@ services:
     image: redis:7.2.3-alpine3.19
     volumes:
       - ./data:/data
+  cron:
+    build: ./cron
+    tty: true
 volumes:
   pnpm_store_frontend:
