@@ -23,7 +23,7 @@ localhost:3000
   - APIs
     1. GET /count
        - timestampsテーブルにタイムスタンプを登録し、過去1秒間のアクセス数をDBから取得
-    2. GET /cleanup
+    2. POST /cleanup
        - timestampsテーブルのタイムスタンプが過去2秒よりも以前のレコードを削除
 - front
   - フロンエンド
