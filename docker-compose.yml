@@ -5,6 +5,7 @@ services:
     tty: true
     volumes:
       - ./app/frontend:/opt/app/frontend
+      - node_modules_frontend:/opt/app/frontend/node_modules
       - pnpm_store_frontend:/opt/app/frontend/.pnpm-store
     ports:
       - 3000:3000
@@ -28,3 +29,4 @@ services:
     tty: true
 volumes:
   pnpm_store_frontend:
+  node_modules_frontend:
