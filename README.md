@@ -32,3 +32,43 @@ localhost:3000
   - timestampsテーブルを配置
 - cron
   - 1分おきに(ii)のAPIをコール
+
+## シーケンス図
+
+```mermaid
+sequenceDiagram
+    participant User as ユーザー
+    participant Frontend as フロントエンド
+    participant Backend as バックエンド
+    participant Redis as Redis
+    participant MySQL as MySQL
+
+    User->>+Frontend: クリックイベント
+    Frontend->>+Backend: クリックデータ送信
+    Backend->>+Redis: セッションID確認
+    Redis-->>-Backend: セッションIDレスポンス
+    alt セッションIDが存在しない場合
+        Backend->>+MySQL: セッションID新規作成
+        MySQL-->>-Backend: 新規セッションID
+    end
+    Backend->>+Redis: クリックデータ記録
+    Redis-->>-Backend: 確認
+    Backend->>-Frontend: 処理完了
+
+    loop 定期的なデータ更新
+        Backend->>+Redis: クリック数カウント取得
+        Redis-->>-Backend: カウントデータ
+        Backend->>+MySQL: クリック数更新
+        MySQL-->>-Backend: 更新確認
+        Backend->>+Redis: 一時データ削除
+        Redis-->>-Backend: 削除確認
+    end
+
+    loop ユーザー数取得
+        Frontend->>+Backend: ユーザー数リクエスト
+        Backend->>+MySQL: クリック数に基づくユーザー数取得
+        MySQL-->>-Backend: ユーザー数
+        Backend->>Frontend: ユーザー数レスポンス
+        Frontend->>User: ユーザー数表示
+    end
+```

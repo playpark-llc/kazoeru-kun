@@ -1,0 +1,20 @@
+datasource db {
+  //url      = "mysql://root:admin_password@mysql/KazoeruKun"
+  provider     = "mysql"
+  url          = env("DATABASE_URL")
+  relationMode = "prisma"
+}
+
+generator client {
+  // Corresponds to the cargo alias created earlier
+  provider = "cargo prisma"
+  // The location to generate the client. Is relative to the position of the schema
+  output   = "../src/prisma.rs"
+}
+
+model SessionCounter {
+  id        String   @id
+  sessionId String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
