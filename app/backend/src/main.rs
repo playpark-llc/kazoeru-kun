@@ -66,5 +66,5 @@ async fn run_server(redis_client: Client) -> tide::Result<()> {
 
 fn main() {
     let redis_client = Client::open("redis://redis:6379/").unwrap();
-    task::block_on(run_server(redis_client));
+    let _ = task::block_on(run_server(redis_client));
 }

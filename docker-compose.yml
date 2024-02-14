@@ -5,6 +5,7 @@ services:
     tty: true
     volumes:
       - ./app/frontend:/opt/app/frontend
+      - node_modules_frontend:/opt/app/frontend/node_modules
       - pnpm_store_frontend:/opt/app/frontend/.pnpm-store
     ports:
       - 3000:3000
@@ -15,6 +16,8 @@ services:
     tty: true
     volumes:
       - ./app/backend:/opt/app/backend
+      - target_backend:/opt/app/backend/target
+      - target_prisma_cli:/opt/app/backend/prisma-cli/target
     ports:
       - 8080:8080
     depends_on:
@@ -22,9 +25,30 @@ services:
   redis:
     image: redis:7.2.3-alpine3.19
     volumes:
-      - ./data:/data
+      - ./redis-data:/data
+  mysql:
+    image: mysql:8.3.0
+    command: --authentication_policy=mysql_native_password
+    restart: always
+    environment:
+      - MYSQL_ROOT_PASSWORD=admin_password
+      - MYSQL_DATABASE=KazoeruKun
+      - MYSQL_USER=admin
+      - MYSQL_PASSWORD=password
+      - TZ=Asia/Tokyo
+    volumes:
+      - ./mysql/store:/var/lib/mysql
+      - type: bind
+        source: ./mysql/conf
+        target: /etc/mysql/conf.d
+    ports:
+      - 7776:3306
+    tty: true
   cron:
     build: ./cron
     tty: true
 volumes:
   pnpm_store_frontend:
+  node_modules_frontend:
+  target_backend:
+  target_prisma_cli:

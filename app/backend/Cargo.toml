@@ -9,4 +9,14 @@ edition = "2021"
 tide = { version = "0.17.0-beta.1"}
 redis = { version = "0.21.0", features = ["aio","async-std-comp"] } 
 async-std = { version = "1.8.0", features = ["attributes"] }
-serde = { version = "1.0", features = ["derive"] }
+serde = "1.0.196"
+
+# [dependencies.prisma-client-rust]
+# git = "https://github.com/Brendonovich/prisma-client-rust"
+# tag = "0.6.11"
+# default-features = false
+# features = ["mysql", "migrations"]
+
+[workspace]
+members = ["prisma-cli"] 
+resolver = "2"

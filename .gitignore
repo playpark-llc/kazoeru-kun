@@ -1,3 +1,6 @@
+.env*
 app/backend/target
+app/backend/prisma-cli/target
 app/frontend/node_modules
-data
+redis-data
+mysql/store
