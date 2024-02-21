@@ -64,11 +64,23 @@ sequenceDiagram
         Redis-->>-Backend: 削除確認
     end
 
-    loop ユーザー数取得
-        Frontend->>+Backend: ユーザー数リクエスト
-        Backend->>+MySQL: クリック数に基づくユーザー数取得
+    loop ユーザー数更新とキャッシュ
+        Backend->>+MySQL: 定期的なユーザー数取得
         MySQL-->>-Backend: ユーザー数
-        Backend->>Frontend: ユーザー数レスポンス
-        Frontend->>User: ユーザー数表示
+        Backend->>+Redis: ユーザー数キャッシュ更新
+        Redis-->>-Backend: 更新確認
+    end
+
+    Frontend->>+Backend: ユーザー数リクエスト
+    Backend->>+Redis: キャッシュされたユーザー数取得
+    Redis-->>-Backend: ユーザー数
+    Backend->>Frontend: ユーザー数レスポンス
+    Frontend->>User: ユーザー数表示
+
+    alt ユーザー数に影響する操作があった場合
+        Backend->>+MySQL: ユーザー数更新
+        MySQL-->>-Backend: 更新確認
+        Backend->>+Redis: キャッシュ無効化/更新
+        Redis-->>-Backend: 無効化/更新確認
     end
 ```
