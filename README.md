@@ -21,10 +21,14 @@ localhost:3000
 - back
   - バックエンド
   - APIs
-    1. GET /count
-       - timestampsテーブルにタイムスタンプを登録し、過去1秒間のアクセス数をDBから取得
-    2. POST /cleanup
-       - timestampsテーブルのタイムスタンプが過去2秒よりも以前のレコードを削除
+    1. POST /session -d '{"session_id": "<SESSION_ID>"}'
+       - click event
+       - redisのkey:<SESSION_ID>に対応するvalueをカウントアップ。keyが存在しなければvalue=1としてレコード作成
+    2. PUT /session
+       - 定期実行
+       - redisのkey, valueからMySQLのテーブルSessionCounterをupsert
+       - redisのvalueがSessionCounterのsessionIdに存在する場合、対象レコードを(key, value + count) -> (sessionId, count)として更新
+       - redisのvalueがSessionCounterのsessionIdに存在しなければ、(key, value) -> (sessionId, count)として新規レコード作成
 - front
   - フロンエンド
   - 1秒おきに(i)のAPIをコールして表示
