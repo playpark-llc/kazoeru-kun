@@ -1,70 +1,208 @@
-use async_std::task;
-use redis::{AsyncCommands, Client};
-use std::time::{SystemTime, UNIX_EPOCH};
-use tide::http::headers::HeaderValue;
-use tide::security::{CorsMiddleware, Origin};
-use tide::{Request, Server};
+use deadpool_redis::redis::{AsyncCommands, AsyncIter};
+use deadpool_redis::{Config, Connection, Pool, Runtime};
+use futures::stream::{self, Collect, StreamExt};
+use prisma::PrismaClient;
+use redis_async::client;
+use rocket::serde::{json::Json, Deserialize, Serialize};
+use rocket::State;
+use std::env;
+use std::sync::Arc;
+use tokio::{sync::Mutex, task};
+mod prisma;
 
-async fn count_records(req: Request<Client>) -> tide::Result<String> {
-    let now = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap()
-        .as_millis();
+#[derive(Deserialize)]
+struct CreateRequest {
+    session_id: String,
+}
+#[derive(Serialize)]
+struct SingleResult {
+    session_id: String,
+    count: u32,
+}
+#[derive(Serialize)]
+struct SingleResponse {
+    message: String,
+    result: SingleResult,
+}
+#[derive(Serialize)]
+struct MultiResponse {
+    message: String,
+    result: Vec<prisma::session_counter::Data>,
+}
+#[derive(Serialize)]
+struct ErrorResponse {
+    error: String,
+}
+#[macro_use]
+extern crate rocket;
 
-    let redis_client = req.state();
-    let mut con = redis_client.get_async_connection().await.unwrap();
+#[post("/session", data = "<input>")]
+async fn post_session(
+    redis_pool: &State<Pool>,
+    prisma_client: &State<Arc<PrismaClient>>,
+    input: Json<CreateRequest>,
+) -> Result<Json<SingleResponse>, Json<ErrorResponse>> {
+    // redisの接続を取得
+    let mut redis_con = redis_pool.get().await.map_err(|e| {
+        Json(ErrorResponse {
+            error: format!("Failed to get redis connection: {:?}", e),
+        })
+    })?;
 
-    let _: () = con
-        .zadd("timestamps", now as f64, now as f64)
+    // redisにセッションIDを保存
+    let session_count = redis_con
+        .incr(input.session_id.clone(), 1)
         .await
-        .unwrap();
+        .map_err(|e| {
+            Json(ErrorResponse {
+                error: format!("Failed to incr session_id to redis: {:?}", e),
+            })
+        })?;
+    let res = match session_count {
+        // アクセス数が1の場合はSessionCounterテーブルに新規登録
+        1 => {
+            // session_idが一致するデータを取得
+            let session_counter = prisma_client
+                .session_counter()
+                .find_unique(prisma::session_counter::session_id::equals(
+                    input.session_id.clone(),
+                ))
+                .exec()
+                .await
+                .map_err(|e| {
+                    Json(ErrorResponse {
+                        error: format!("Failed to execute query: {:?}", e),
+                    })
+                })?;
+            match session_counter {
+                Some(session_counter) => SingleResponse {
+                    message: format!(
+                        "session_id: {:?}のアクセス数は{:?}です",
+                        input.session_id.clone(),
+                        session_count
+                    ),
+                    result: SingleResult {
+                        session_id: session_counter.session_id,
+                        count: session_counter.count as u32,
+                    },
+                },
+                None => {
+                    let session_counter = prisma_client
+                        .session_counter()
+                        .create(input.session_id.clone(), 1, vec![])
+                        .exec()
+                        .await
+                        .map_err(|e| {
+                            return Json(ErrorResponse {
+                                error: format!("Failed to create session counter: {:?}", e),
+                            });
+                        })?;
 
-    let one_second_ago = now - 1000;
-
-    let count: isize = con
-        .zcount("timestamps", one_second_ago as f64, now as f64)
-        .await
-        .unwrap();
-
-    Ok(format!("Number of records in the last second: {}", count))
+                    SingleResponse {
+                        message: "新規セッションが登録されました".to_string(),
+                        result: SingleResult {
+                            session_id: session_counter.session_id,
+                            count: session_counter.count as u32,
+                        },
+                    }
+                }
+            }
+        }
+        // アクセス数が1以外の場合はSessionCounterテーブルを更新しない
+        _ => SingleResponse {
+            message: format!(
+                "session_id: {:?}のアクセス数は{:?}です",
+                input.session_id.clone(),
+                session_count
+            ),
+            result: SingleResult {
+                session_id: input.session_id.clone(),
+                count: session_count,
+            },
+        },
+    };
+    return Ok(Json(res));
 }
 
-async fn cleanup_records(req: Request<Client>) -> tide::Result<String> {
-    let now = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap()
-        .as_millis();
-    let two_seconds_ago = now - 2000;
+#[put("/session")]
+async fn put_session(
+    redis_pool: &State<Pool>,
+    prisma_client: &State<Arc<PrismaClient>>,
+) -> Result<Json<SingleResponse>, Json<ErrorResponse>> {
+    // redisの接続を取得
+    let mut redis_con = redis_pool.get().await.map_err(|e| {
+        Json(ErrorResponse {
+            error: format!("Failed to get redis connection: {:?}", e),
+        })
+    })?;
 
-    let redis_client = req.state();
-    let mut con = redis_client.get_async_connection().await.unwrap();
+    // redisにセッションIDを保存
+    let mut session_id_iter: AsyncIter<String> = redis_con.scan().await.map_err(|e| {
+        Json(ErrorResponse {
+            error: format!("Failed to keys * redis connection: {:?}", e),
+        })
+    })?;
 
-    let removed: isize = con
-        .zrembyscore("timestamps", 0, two_seconds_ago as f64)
-        .await
-        .unwrap();
+    let mut handles = vec![];
+    while let Some(session_id) = session_id_iter.next().await {
+        let mut redis_con = redis_pool.get().await.map_err(|e| {
+            Json(ErrorResponse {
+                error: format!("Failed to get redis connection: {:?}", e),
+            })
+        })?;
+        let prisma_client = Arc::clone(&prisma_client);
+        let handle = tokio::spawn(async move {
+            let count: i32 = redis_con.get(&session_id).await.unwrap_or(0);
+            prisma_client
+                .session_counter()
+                .upsert(
+                    prisma::session_counter::session_id::equals(session_id.clone()),
+                    (session_id.clone(), count, vec![]),
+                    vec![prisma::session_counter::count::set(count)],
+                )
+                .exec()
+                .await
+                .map_err(|e| {
+                    Json(ErrorResponse {
+                        error: format!("Failed to upsert session counter: {:?}", e),
+                    })
+                })
+        });
+        handles.push(handle);
+    }
 
-    Ok(format!("Removed {} records order than 2 seconds", removed))
+    for handle in handles {
+        handle.await.unwrap(); // エラーハンドリングの改善が必要
+    }
+
+    let res = SingleResponse {
+        message: "セッション情報を更新しました".to_string(),
+        result: SingleResult {
+            session_id: "test".to_string(),
+            count: 0,
+        },
+    };
+    Ok(Json(res))
 }
 
-async fn run_server(redis_client: Client) -> tide::Result<()> {
-    let mut app = Server::with_state(redis_client);
+#[launch]
+async fn rocket() -> _ {
+    // Configオブジェクトの作成
+    let mut cfg = Config::default();
+    println!("cfg: {:?}",cfg);
+    cfg.connection = None;
+    cfg.url = Some("redis://redis:6379/".to_string());
+    println!("cfg: {:?}",cfg);
 
-    let cors = CorsMiddleware::new()
-        .allow_methods("GET, POST, OPTIONS".parse::<HeaderValue>().unwrap())
-        .allow_origin(Origin::from("http://localhost:3000"))
-        .allow_credentials(false);
+    // プールの作成
+    let redis_pool = cfg.create_pool(Some(Runtime::Tokio1)).unwrap();
 
-    app.with(cors);
 
-    app.at("/count").get(count_records);
-    app.at("/cleanup").post(cleanup_records);
+    // prismaクライアントの初期化
+    let prisma_client = Arc::from(PrismaClient::_builder().build().await.unwrap());
 
-    app.listen("0.0.0.0:8080").await?;
-    Ok(())
-}
-
-fn main() {
-    let redis_client = Client::open("redis://redis:6379/").unwrap();
-    let _ = task::block_on(run_server(redis_client));
+    rocket::build()
+        .manage(redis_pool)
+        .manage(prisma_client)
+        .mount("/", routes![post_session, put_session])
 }

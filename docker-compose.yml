@@ -1,4 +1,3 @@
-version: "3"
 services:
   front:
     build: ./app/frontend
@@ -11,24 +10,32 @@ services:
       - 3000:3000
     depends_on:
       - back
+
   back:
     build: ./app/backend
+    command: sh -c "cargo watch -x 'run'"
+    # command: sh
     tty: true
+    env_file:
+      - ./app/backend/.env
     volumes:
       - ./app/backend:/opt/app/backend
       - target_backend:/opt/app/backend/target
       - target_prisma_cli:/opt/app/backend/prisma-cli/target
     ports:
-      - 8080:8080
+      - 8881:8000
     depends_on:
       - redis
+      - db
+
   redis:
     image: redis:7.2.3-alpine3.19
     volumes:
       - ./redis-data:/data
-  mysql:
+
+  db:
     image: mysql:8.3.0
-    command: --authentication_policy=mysql_native_password
+    command: --default-authentication-plugin=mysql_native_password
     restart: always
     environment:
       - MYSQL_ROOT_PASSWORD=admin_password
@@ -44,9 +51,11 @@ services:
     ports:
       - 7776:3306
     tty: true
+
   cron:
     build: ./cron
     tty: true
+
 volumes:
   pnpm_store_frontend:
   node_modules_frontend:
