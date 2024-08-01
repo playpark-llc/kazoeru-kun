@@ -6,16 +6,19 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-tide = { version = "0.17.0-beta.1"}
-redis = { version = "0.21.0", features = ["aio","async-std-comp"] } 
-async-std = { version = "1.8.0", features = ["attributes"] }
-serde = "1.0.196"
+serde = "1.0.200"
+rocket = { version = "0.5.1", features = ["secrets", "tls", "json"] }
+futures = "0.3.30"
+tokio = "1.38.0"
+redis-async = "0.17.2"
+deadpool-redis = "0.15.1"
+deadpool = "0.12.1"
 
-# [dependencies.prisma-client-rust]
-# git = "https://github.com/Brendonovich/prisma-client-rust"
-# tag = "0.6.11"
-# default-features = false
-# features = ["mysql", "migrations"]
+[dependencies.prisma-client-rust]
+git = "https://github.com/Brendonovich/prisma-client-rust"
+tag = "0.6.11"
+default-features = false
+features = ["mysql", "migrations"]
 
 [workspace]
 members = ["prisma-cli"] 
