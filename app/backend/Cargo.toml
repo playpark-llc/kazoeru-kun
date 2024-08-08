@@ -12,7 +12,6 @@ futures = "0.3.30"
 tokio = "1.38.0"
 redis-async = "0.17.2"
 deadpool-redis = "0.15.1"
-deadpool = "0.12.1"
 
 [dependencies.prisma-client-rust]
 git = "https://github.com/Brendonovich/prisma-client-rust"
