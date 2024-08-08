@@ -2802,7 +2802,6 @@ dependencies = [
 name = "opt"
 version = "0.1.0"
 dependencies = [
- "deadpool",
  "deadpool-redis",
  "futures",
  "prisma-client-rust",
