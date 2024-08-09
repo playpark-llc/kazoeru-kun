@@ -71,13 +71,25 @@ async fn post_session(
                     })
                 })?;
             match session_counter {
-                Some(session_counter) => Response {
-                    message: "セッションカウントが更新されました".to_string(),
-                    result: SingleResult {
-                        session_id: session_counter.session_id,
-                        count: session_counter.count as u32,
-                    },
-                },
+                Some(session_counter) => {
+                    // redisの接続を取得
+                    let mut redis_con = get_redis_connection(redis_pool).await;
+                    let session_count = redis_con
+                        .incr(session_id.clone(), session_counter.count)
+                        .await
+                        .map_err(|e| {
+                            Json(ErrorResponse {
+                                error: format!("Failed to incr session_id to redis: {:?}", e),
+                            })
+                        })?;
+                    Response {
+                        message: "セッションカウントが更新されました".to_string(),
+                        result: SingleResult {
+                            session_id: session_id.clone(),
+                            count: session_count,
+                        },
+                    }
+                }
                 None => {
                     let session_counter = prisma_client
                         .session_counter()
