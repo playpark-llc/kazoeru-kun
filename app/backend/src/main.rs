@@ -55,7 +55,7 @@ async fn post_session(
         })
     })?;
     let res = match session_count {
-        // アクセス数が1の場合はSessionCounterテーブルに新規登録
+        // session_count=1の場合はSessionCounterテーブルにデータがないか確認
         1 => {
             // session_idが一致するデータを取得
             let session_counter = prisma_client
@@ -71,6 +71,8 @@ async fn post_session(
                     })
                 })?;
             match session_counter {
+                // SessionCounterテーブルにsession_idが存在する場合
+                // redisのカウントをSessionCounterのcount分インクリメント
                 Some(session_counter) => {
                     // redisの接続を取得
                     let mut redis_con = get_redis_connection(redis_pool).await;
@@ -90,6 +92,8 @@ async fn post_session(
                         },
                     }
                 }
+                // SessionCounterテーブルにsession_idが存在しない場合
+                // SessionCounterテーブルに新規データを登録
                 None => {
                     let session_counter = prisma_client
                         .session_counter()
@@ -140,43 +144,21 @@ async fn put_session(
     })?;
 
     let prisma_client = Arc::clone(&prisma_client);
-    let session_counter_find_many = prisma_client
-        .session_counter()
-        .find_many(vec![prisma::session_counter::session_id::not(
-            "".to_string(),
-        )])
-        .exec()
-        .await
-        .map_err(|e| {
-            Json(ErrorResponse {
-                error: format!("Failed to find many session counter: {:?}", e),
-            })
-        })?;
 
     let mut handles = vec![];
     while let Some(session_id) = session_id_iter.next().await {
         let mut redis_con = get_redis_connection(redis_pool).await;
         let prisma_client = Arc::clone(&prisma_client);
-        let session_counter_find_many = session_counter_find_many.clone();
         let handle = tokio::spawn(async move {
             let redis_count: i32 = redis_con.get(&session_id).await.unwrap_or(0);
 
-            let db_count = match session_counter_find_many
-                .iter()
-                .find(|&s| s.session_id == session_id.clone())
-            {
-                Some(s) => s.count,
-                None => 0,
-            };
-
             println!("redis:{:?}", redis_count);
-            println!("db:{:?}", db_count);
             prisma_client
                 .session_counter()
                 .upsert(
                     prisma::session_counter::session_id::equals(session_id.clone()),
-                    (session_id.clone(), redis_count + db_count, vec![]),
-                    vec![prisma::session_counter::count::set(redis_count + db_count)],
+                    (session_id.clone(), redis_count, vec![]),
+                    vec![prisma::session_counter::count::set(redis_count)],
                 )
                 .exec()
                 .await
