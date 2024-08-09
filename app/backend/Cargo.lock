@@ -2805,6 +2805,7 @@ dependencies = [
  "deadpool-redis",
  "futures",
  "prisma-client-rust",
+ "rand 0.8.5",
  "redis-async",
  "rocket",
  "serde",
