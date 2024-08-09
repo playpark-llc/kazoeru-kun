@@ -21,7 +21,7 @@ localhost:3000
 - back
   - バックエンド
   - APIs
-    1. POST /session -d '{"session_id": "<SESSION_ID>"}'
+    1. POST /session -b 'session=<SESSION_ID>}'
        - click event
        - redisのkey:<SESSION_ID>に対応するvalueをカウントアップ。keyが存在しなければvalue=1としてレコード作成
     2. PUT /session

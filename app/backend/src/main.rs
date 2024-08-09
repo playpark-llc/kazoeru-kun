@@ -4,15 +4,14 @@ use deadpool_redis::{
 };
 use futures::stream::StreamExt;
 use prisma::PrismaClient;
-use rocket::serde::{json::Json, Deserialize, Serialize};
+use rand::distributions::Alphanumeric;
+use rand::{thread_rng, Rng};
+use rocket::http::{Cookie, CookieJar};
+use rocket::serde::{json::Json, Serialize};
 use rocket::State;
 use std::sync::Arc;
 mod prisma;
 
-#[derive(Deserialize)]
-struct CreateRequest {
-    session_id: String,
-}
 #[derive(Serialize)]
 struct SingleResult {
     session_id: String,
@@ -32,24 +31,29 @@ struct ErrorResponse {
 #[macro_use]
 extern crate rocket;
 
-#[post("/session", data = "<input>")]
+#[post("/session")]
 async fn post_session(
     redis_pool: &State<Pool>,
     prisma_client: &State<Arc<PrismaClient>>,
-    input: Json<CreateRequest>,
+    cookies: &CookieJar<'_>,
 ) -> Result<Json<Response<SingleResult>>, Json<ErrorResponse>> {
+    let session_id: String;
+    if let Some(session) = cookies.get("session") {
+        session_id = session.value().to_string();
+    } else {
+        session_id = generate_session_id();
+        // cookieをセット
+        cookies.add(Cookie::new("session", session_id.clone()));
+    }
     // redisの接続を取得
     let mut redis_con = get_redis_connection(redis_pool).await;
 
     // redisにセッションIDを保存
-    let session_count = redis_con
-        .incr(input.session_id.clone(), 1)
-        .await
-        .map_err(|e| {
-            Json(ErrorResponse {
-                error: format!("Failed to incr session_id to redis: {:?}", e),
-            })
-        })?;
+    let session_count = redis_con.incr(session_id.clone(), 1).await.map_err(|e| {
+        Json(ErrorResponse {
+            error: format!("Failed to incr session_id to redis: {:?}", e),
+        })
+    })?;
     let res = match session_count {
         // アクセス数が1の場合はSessionCounterテーブルに新規登録
         1 => {
@@ -57,7 +61,7 @@ async fn post_session(
             let session_counter = prisma_client
                 .session_counter()
                 .find_unique(prisma::session_counter::session_id::equals(
-                    input.session_id.clone(),
+                    session_id.clone(),
                 ))
                 .exec()
                 .await
@@ -77,7 +81,7 @@ async fn post_session(
                 None => {
                     let session_counter = prisma_client
                         .session_counter()
-                        .create(input.session_id.clone(), 1, vec![])
+                        .create(session_id.clone(), 1, vec![])
                         .exec()
                         .await
                         .map_err(|e| {
@@ -100,7 +104,7 @@ async fn post_session(
         _ => Response {
             message: "セッションカウントが更新されました".to_string(),
             result: SingleResult {
-                session_id: input.session_id.clone(),
+                session_id: session_id.clone(),
                 count: session_count,
             },
         },
@@ -203,6 +207,15 @@ async fn get_redis_connection(redis_pool: &State<Pool>) -> Connection {
         Ok(con) => con,
         Err(e) => panic!("Failed to get redis connection: {:?}", e),
     }
+}
+
+// ランダムなセッションIDを生成する関数
+fn generate_session_id() -> String {
+    thread_rng()
+        .sample_iter(&Alphanumeric)
+        .take(30) // 30文字のランダムな文字列を生成
+        .map(char::from)
+        .collect()
 }
 
 #[launch]
