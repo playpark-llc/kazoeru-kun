@@ -1,4 +1,4 @@
-.env*
+.env
 app/backend/target
 app/backend/prisma-cli/target
 app/backend/src/prisma.rs
