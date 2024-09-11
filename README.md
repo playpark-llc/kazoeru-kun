@@ -21,7 +21,7 @@ localhost:3000
 - back
   - バックエンド
   - APIs
-    1. POST /session -b 'session=<SESSION_ID>}'
+    1. POST /session -b 'session=<SESSION_ID>'
        - click event
        - redisのkey:<SESSION_ID>に対応するvalueをカウントアップ。keyが存在しなければvalue=1としてレコード作成
     2. PUT /session
@@ -49,14 +49,18 @@ sequenceDiagram
 
     User->>+Frontend: クリックイベント
     Frontend->>+Backend: クリックデータ送信
-    Backend->>+Redis: セッションID確認
-    Redis-->>-Backend: セッションIDレスポンス
-    alt セッションIDが存在しない場合
+    Backend->>+Redis: セッションIDインクリメント
+    Redis-->>-Backend: セッションIDのカウント取得
+    alt カウント= 1(セッションIDが存在しなかった場合)
+        Backend->>+MySQL: セッションIDに対応するレコードを取得
+        MySQL-->>-Backend: レコード
+      alt レコードが存在する場合
+        Backend->>+Redis: レコードから取得したカウントでインクリメント
+        Redis-->>-Backend: セッションIDのカウント取得
+      else レコードが存在しない場合
         Backend->>+MySQL: セッションID新規作成
-        MySQL-->>-Backend: 新規セッションID
+      end
     end
-    Backend->>+Redis: クリックデータ記録
-    Redis-->>-Backend: 確認
     Backend->>-Frontend: 処理完了
 
     loop 定期的なデータ更新
