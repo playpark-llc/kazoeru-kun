@@ -53,6 +53,22 @@ services:
     ports:
       - 7776:3306
     tty: true
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "mysqladmin",
+          "ping",
+          "-h",
+          "localhost",
+          "-u",
+          "root",
+          "-p$MYSQL_ROOT_PASSWORD",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 6
+      start_period: 3s
 
   cron:
     build: ./cron
@@ -62,6 +78,19 @@ services:
       - type: bind
         source: ./cron
         target: /cron
+
+  tbls: # create table documents when db healthcheck passed
+    image: ghcr.io/k1low/tbls
+    working_dir: /tbls
+    volumes:
+      - ./doc:/tbls/doc
+      - ./.tbls.yml:/tbls/.tbls.yml
+    depends_on:
+      db:
+        condition: service_healthy
+    entrypoint: >
+      tbls doc -f
+    tty: true
 
 volumes:
   pnpm_store_frontend:

@@ -95,3 +95,9 @@ sequenceDiagram
         Redis-->>-Backend: 無効化/更新確認
     end
 ```
+
+## Table Definitions
+
+[session_counter](./doc/KazoeruKun/session_counter.md)
+
+[count_summary](./doc/KazoeruKun/count_summary.md)
