@@ -3,7 +3,6 @@ name = "opt"
 version = "0.1.0"
 edition = "2021"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
 serde = "1.0.200"
@@ -13,13 +12,4 @@ tokio = "1.38.0"
 redis-async = "0.17.2"
 deadpool-redis = "0.15.1"
 rand = "0.8.5"
-
-[dependencies.prisma-client-rust]
-git = "https://github.com/Brendonovich/prisma-client-rust"
-tag = "0.6.11"
-default-features = false
-features = ["mysql", "migrations"]
-
-[workspace]
-members = ["prisma-cli"] 
-resolver = "2"
+sea-orm = { version = "=1.0.0", features = ["sqlx-mysql", "runtime-tokio-native-tls", "macros"] }

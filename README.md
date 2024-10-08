@@ -29,6 +29,9 @@ localhost:3000
        - redisのkey, valueからMySQLのテーブルSessionCounterをupsert
        - redisのvalueがSessionCounterのsessionIdに存在する場合、対象レコードを(key, value + count) -> (sessionId, count)として更新
        - redisのvalueがSessionCounterのsessionIdに存在しなければ、(key, value) -> (sessionId, count)として新規レコード作成
+    3. POST /count
+       - 定期実行
+       - SessionCounter.countの合計をCountSummaryに1レコード追加
 - front
   - フロンエンド
   - 1秒おきに(i)のAPIをコールして表示
