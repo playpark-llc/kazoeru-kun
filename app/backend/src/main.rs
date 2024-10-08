@@ -38,6 +38,7 @@ extern crate rocket;
 #[post("/session")]
 async fn post_session(
     redis_pool: &State<Pool>,
+    db: &State<DatabaseConnection>,
     cookies: &CookieJar<'_>,
 ) -> Result<Json<Response<SingleResult>>, Json<ErrorResponse>> {
     let session_id: String;
@@ -60,13 +61,10 @@ async fn post_session(
     let res = match session_count {
         // session_count=1の場合はSessionCounterテーブルにデータがないか確認
         1 => {
-            let db: DatabaseConnection = Database::connect(env::var("DATABASE_URL").unwrap())
-                .await
-                .unwrap();
             // session_idが一致するデータを取得
             let session_counter_record = SessionCounter::find()
                 .filter(session_counter::Column::SessionId.eq(&session_id))
-                .one(&db)
+                .one(db.inner())
                 .await
                 .map_err(|e| {
                     Json(ErrorResponse {
@@ -106,7 +104,7 @@ async fn post_session(
                         updated_at: NotSet,
                     };
                     let _session_counter_created = SessionCounter::insert(inserting_record)
-                        .exec(&db)
+                        .exec(db.inner())
                         .await
                         .unwrap();
 
@@ -131,6 +129,7 @@ async fn post_session(
 #[put("/session")]
 async fn put_session(
     redis_pool: &State<Pool>,
+    db: &State<DatabaseConnection>
 ) -> Result<Json<Response<String>>, Json<ErrorResponse>> {
     // redisの接続を取得
     let mut redis_con = get_redis_connection(redis_pool).await;
@@ -141,10 +140,6 @@ async fn put_session(
             error: format!("Failed to keys * redis connection: {:?}", e),
         })
     })?;
-
-    let db: DatabaseConnection = Database::connect(env::var("DATABASE_URL").unwrap())
-        .await
-        .unwrap();
 
     let mut insert_records = vec![];
     while let Some(session_id) = session_id_iter.next().await {
@@ -178,7 +173,7 @@ async fn put_session(
     // upsertの結果を取得
     SessionCounter::insert_many(insert_records)
         .on_conflict(on_conflict.clone())
-        .exec(&db)
+        .exec(db.inner())
         .await
         .unwrap();
 
@@ -221,14 +216,11 @@ async fn rocket() -> _ {
     let mut cfg = Config::default();
     println!("cfg: {:?}", cfg);
     cfg.connection = None;
-    cfg.url = Some("redis://redis:6379/".to_string());
+    cfg.url = Some(env::var("REDIS_URL").unwrap());
     println!("cfg: {:?}", cfg);
 
     // プールの作成
     let redis_pool = cfg.create_pool(Some(Runtime::Tokio1)).unwrap();
-
-    // // prismaクライアントの初期化
-    // let prisma_client = Arc::from(PrismaClient::_builder().build().await.unwrap());
 
     let db: DatabaseConnection = Database::connect(env::var("DATABASE_URL").unwrap())
         .await
