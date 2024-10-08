@@ -6,4 +6,3 @@ app/frontend/node_modules
 redis-data
 mysql/store
 sea_generated
-.tbls.yml
