@@ -96,8 +96,6 @@ sequenceDiagram
     end
 ```
 
-## Table Definitions
+## Database Definition
 
-[session_counter](./doc/KazoeruKun/session_counter.md)
-
-[count_summary](./doc/KazoeruKun/count_summary.md)
+[Database Definition](./doc/KazoeruKun/README.md)

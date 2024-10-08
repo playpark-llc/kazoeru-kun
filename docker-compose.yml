@@ -89,7 +89,7 @@ services:
       db:
         condition: service_healthy
     entrypoint: >
-      tbls doc -f
+      tbls doc -f --rm-dist
     tty: true
 
 volumes:
