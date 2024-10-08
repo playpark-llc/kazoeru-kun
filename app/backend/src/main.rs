@@ -129,7 +129,7 @@ async fn post_session(
 #[put("/session")]
 async fn put_session(
     redis_pool: &State<Pool>,
-    db: &State<DatabaseConnection>
+    db: &State<DatabaseConnection>,
 ) -> Result<Json<Response<String>>, Json<ErrorResponse>> {
     // redisの接続を取得
     let mut redis_con = get_redis_connection(redis_pool).await;
