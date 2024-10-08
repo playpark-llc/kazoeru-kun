@@ -57,6 +57,11 @@ services:
   cron:
     build: ./cron
     tty: true
+    working_dir: /cron
+    volumes:
+      - type: bind
+        source: ./cron
+        target: /cron
 
 volumes:
   pnpm_store_frontend:
