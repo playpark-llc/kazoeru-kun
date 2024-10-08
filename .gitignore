@@ -1,7 +1,8 @@
 .env
-app/backend/target
+target
 app/backend/prisma-cli/target
 app/backend/src/prisma.rs
 app/frontend/node_modules
 redis-data
 mysql/store
+sea_generated

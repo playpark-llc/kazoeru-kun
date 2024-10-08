@@ -14,14 +14,16 @@ services:
   back:
     build: ./app/backend
     command: sh -c "cargo watch -x 'run'"
-    # command: sh
     tty: true
+    working_dir: /backend
     env_file:
       - ./app/backend/.env
     volumes:
-      - ./app/backend:/opt/app/backend
-      - target_backend:/opt/app/backend/target
-      - target_prisma_cli:/opt/app/backend/prisma-cli/target
+      - type: bind
+        source: ./app/backend
+        target: /backend
+      - target_backend:/backend/target
+      - target_migration:/backend/migration/target
     ports:
       - 8881:8000
     depends_on:
@@ -60,4 +62,4 @@ volumes:
   pnpm_store_frontend:
   node_modules_frontend:
   target_backend:
-  target_prisma_cli:
+  target_migration:

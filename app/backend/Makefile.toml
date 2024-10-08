@@ -1,0 +1,3 @@
+[tasks.gen-entity]
+command="sea-orm-cli"
+args = ["generate","entity","--expanded-format","--output-dir","src/sea_generated"]
