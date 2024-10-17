@@ -13,3 +13,4 @@ redis-async = "0.17.2"
 deadpool-redis = "0.15.1"
 rand = "0.8.5"
 sea-orm = { version = "=1.0.0", features = ["sqlx-mysql", "runtime-tokio-native-tls", "macros"] }
+chrono = "0.4.38"

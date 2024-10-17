@@ -1,5 +1,6 @@
 mod sea_generated;
 
+use ::chrono::{DateTime, Datelike, Days, DurationRound, Local, NaiveDate, TimeDelta};
 use deadpool_redis::{
     redis::{AsyncCommands, AsyncIter},
     Config, Connection, Pool, Runtime,
@@ -7,18 +8,25 @@ use deadpool_redis::{
 use futures::stream::StreamExt;
 use rand::distributions::Alphanumeric;
 use rand::{thread_rng, Rng};
-use rocket::http::{Cookie, CookieJar};
-use rocket::serde::{json::Json, Serialize};
 use rocket::State;
+use rocket::{
+    form::FromForm,
+    http::{Cookie, CookieJar},
+    serde::{json::Json, Serialize},
+    time::OffsetDateTime,
+};
 use sea_generated::{prelude::SessionCounter, session_counter};
 use sea_orm::{
-    sea_query::OnConflict, ColumnTrait, Database, DatabaseConnection, EntityTrait, NotSet,
-    QueryFilter, Set,
+    prelude::Decimal,
+    sea_query::OnConflict,
+    sqlx::types::chrono::{self, TimeZone},
+    ColumnTrait, Database, DatabaseConnection, DbErr, EntityTrait, FromQueryResult, QueryFilter,
+    QuerySelect, Set,
 };
 use std::env;
 
 #[derive(Serialize)]
-struct SingleResult {
+struct SessionCount {
     count: u32,
 }
 
@@ -35,19 +43,61 @@ struct ErrorResponse {
 #[macro_use]
 extern crate rocket;
 
+#[derive(FromQueryResult, Debug, Serialize, Clone)]
+struct SessionCounterSummary {
+    sum_count: Decimal,
+}
+
+// cookieの有効期限を取得
+fn create_expiration() -> chrono::DateTime<Local> {
+    // 現在の日付を取得
+    let now = Local::now();
+
+    // 今日の23:59:59を設定
+    Local
+        .with_ymd_and_hms(now.year(), now.month(), now.day() + 1, 0, 0, 0)
+        .unwrap() // 有効な日時であることが確実なのでunwrapを使用
+}
+
+// 期限付きのsession_idをCookieに設定
+fn create_session_cookie_with_expiration(
+    cookies: &CookieJar<'_>,
+    expiration: chrono::DateTime<Local>,
+) -> String {
+    let session_id = generate_session_id();
+
+    // chronoのDateTimeをtime::OffsetDateTimeに変換
+    let offset_expiration = OffsetDateTime::from_unix_timestamp(expiration.timestamp()).unwrap();
+
+    // Cookieを作成し、有効期限を設定
+    let mut cookie = Cookie::new("session", session_id.clone());
+    cookie.set_expires(offset_expiration);
+
+    println!("cookie value: {:?}", cookie.value());
+    println!("cookie expires:{:?}", cookie.expires());
+
+    cookies.add(cookie);
+
+    session_id
+}
+
 #[post("/session")]
 async fn post_session(
     redis_pool: &State<Pool>,
-    db: &State<DatabaseConnection>,
     cookies: &CookieJar<'_>,
-) -> Result<Json<Response<SingleResult>>, Json<ErrorResponse>> {
+) -> Result<Json<Response<SessionCount>>, Json<ErrorResponse>> {
     let session_id: String;
-    if let Some(session) = cookies.get("session") {
-        session_id = session.value().to_string();
-    } else {
-        session_id = generate_session_id();
-        // cookieをセット
-        cookies.add(Cookie::new("session", session_id.clone()));
+    let some_cookie = cookies.get("session");
+    match some_cookie {
+        Some(cookie) => {
+            // クッキーの有効期限を取得
+            println!("{}, {:?}", cookie.value(), cookie.expires());
+            session_id = cookie.value().to_string();
+        }
+        None => {
+            let expiration = create_expiration();
+            session_id = create_session_cookie_with_expiration(cookies, expiration);
+        }
     }
     // redisの接続を取得
     let mut redis_con = get_redis_connection(redis_pool).await;
@@ -58,67 +108,29 @@ async fn post_session(
             error: format!("Failed to incr session_id to redis: {:?}", e),
         })
     })?;
+
     let res = match session_count {
-        // session_count=1の場合はSessionCounterテーブルにデータがないか確認
+        // session_idのカウントが1の場合は有効期限を設定
         1 => {
-            // session_idが一致するデータを取得
-            let session_counter_record = SessionCounter::find()
-                .filter(session_counter::Column::SessionId.eq(&session_id))
-                .one(db.inner())
+            let expiration = create_expiration();
+            redis_con
+                .expire_at::<String, u32>(session_id.clone(), expiration.timestamp())
                 .await
                 .map_err(|e| {
                     Json(ErrorResponse {
-                        error: format!("Failed to execute query: {:?}", e),
+                        error: format!("Failed to set expiration to redis: {:?}", e),
                     })
                 })?;
 
-            match session_counter_record {
-                // SessionCounterテーブルにsession_idが存在する場合
-                // redisのカウントをSessionCounterのcount分インクリメント
-                Some(session_counter) => {
-                    // redisの接続を取得
-                    let mut redis_con = get_redis_connection(redis_pool).await;
-                    let session_count = redis_con
-                        .incr(session_id.clone(), session_counter.count)
-                        .await
-                        .map_err(|e| {
-                            Json(ErrorResponse {
-                                error: format!("Failed to incr session_id to redis: {:?}", e),
-                            })
-                        })?;
-                    Response {
-                        message: "セッションカウントが更新されました".to_string(),
-                        result: SingleResult {
-                            count: session_count,
-                        },
-                    }
-                }
-                // SessionCounterテーブルにsession_idが存在しない場合
-                // SessionCounterテーブルに新規データを登録
-                None => {
-                    let inserting_record = session_counter::ActiveModel {
-                        id: NotSet,
-                        session_id: Set(session_id),
-                        count: Set(1),
-                        created_at: NotSet,
-                        updated_at: NotSet,
-                    };
-                    let _session_counter_created = SessionCounter::insert(inserting_record)
-                        .exec(db.inner())
-                        .await
-                        .unwrap();
-
-                    Response {
-                        message: "新規セッションが登録されました".to_string(),
-                        result: SingleResult { count: 1 },
-                    }
-                }
+            Response {
+                message: "新規セッションが登録されました".to_string(),
+                result: SessionCount { count: 1 },
             }
         }
-        // アクセス数が1以外の場合はSessionCounterテーブルを更新しない
+        // session_idのカウントが1以外の場合なにもしない
         _ => Response {
             message: "セッションカウントが更新されました".to_string(),
-            result: SingleResult {
+            result: SessionCount {
                 count: session_count,
             },
         },
@@ -134,7 +146,7 @@ async fn put_session(
     // redisの接続を取得
     let mut redis_con = get_redis_connection(redis_pool).await;
 
-    // redisにセッションIDを保存
+    // セッションIDのイテレータ取得を保存
     let mut session_id_iter: AsyncIter<String> = redis_con.scan().await.map_err(|e| {
         Json(ErrorResponse {
             error: format!("Failed to keys * redis connection: {:?}", e),
@@ -146,9 +158,6 @@ async fn put_session(
         let mut redis_con = get_redis_connection(redis_pool).await;
         let insert_record = tokio::spawn(async move {
             let redis_count: i32 = redis_con.get(&session_id).await.unwrap_or(0);
-
-            println!("redis:{:?}", redis_count);
-
             session_counter::ActiveModel {
                 session_id: Set(session_id.clone().to_owned()),
                 count: Set(redis_count.to_owned()),
@@ -156,7 +165,12 @@ async fn put_session(
             }
         })
         .await
-        .unwrap();
+        .map_err(|e| {
+            Json(ErrorResponse {
+                error: format!("Failed to create insert record: {:?}", e),
+            })
+        })?;
+
         insert_records.push(insert_record);
     }
 
@@ -171,25 +185,109 @@ async fn put_session(
         .to_owned();
 
     // upsertの結果を取得
-    SessionCounter::insert_many(insert_records)
+    let insert_result = SessionCounter::insert_many(insert_records)
         .on_conflict(on_conflict.clone())
         .exec(db.inner())
-        .await
-        .unwrap();
+        .await;
 
-    // redisのデータを削除
-    let mut redis_con = get_redis_connection(redis_pool).await;
-    deadpool_redis::redis::cmd("FLUSHDB")
-        .query_async(&mut redis_con)
-        .await
-        .map_err(|e| {
-            Json(ErrorResponse {
-                error: format!("Failed to upsert session counter: {:?}", e),
-            })
-        })?;
+    match insert_result {
+        Ok(_) => {}
+        Err(e) => {
+            if e.eq(&DbErr::RecordNotInserted) {
+                return Ok(Json(Response {
+                    message: "更新するDBのセッション情報はありませんでした".to_string(),
+                    result: "Success".to_string(),
+                }));
+            }
+            return Err(Json(ErrorResponse {
+                error: format!("Failed to upsert session_counter table in db: {:?}", e),
+            }));
+        }
+    }
     let res = Response {
         message: "DBのセッション情報を更新しました".to_string(),
         result: "Sccsess".to_string(),
+    };
+    Ok(Json(res))
+}
+
+#[derive(FromForm)]
+struct DateRange {
+    start_date: Option<rocket::time::Date>,
+    end_date: Option<rocket::time::Date>,
+}
+#[get("/count_summary?<date_range..>")]
+async fn get_count_summary(
+    redis_pool: &State<Pool>,
+    db: &State<DatabaseConnection>,
+    date_range: Option<DateRange>,
+) -> Result<Json<Response<SessionCounterSummary>>, Json<ErrorResponse>> {
+    // 期間の指定がない場合は、先週の月曜日から日曜日までの期間を取得
+    let mut start_date: DateTime<Local> = Local::now()
+        .duration_trunc(TimeDelta::days(1))
+        .unwrap()
+        .checked_sub_days(Days::new(
+            (Local::now().weekday().number_from_monday() + 6) as u64,
+        ))
+        .unwrap();
+    let mut end_date: DateTime<Local> = Local::now()
+        .duration_trunc(TimeDelta::days(1))
+        .unwrap()
+        .checked_sub_days(Days::new(
+            (Local::now().weekday().number_from_monday() - 1) as u64,
+        ))
+        .unwrap();
+    if let Some(date_range) = date_range {
+        if let Some(start_date_input) = date_range.start_date {
+            println!("start_date_input: {:?}", start_date_input);
+            let naive_start_date = NaiveDate::from_ymd_opt(
+                start_date_input.year().into(),
+                (start_date_input.month() as u32).into(),
+                start_date_input.day().into(),
+            )
+            .unwrap();
+            start_date = Local
+                .from_local_datetime(&naive_start_date.and_hms_opt(0, 0, 0).unwrap())
+                .single()
+                .unwrap();
+        }
+        if let Some(end_date_input) = date_range.end_date {
+            println!("end_date_input: {:?}", end_date_input);
+            let naive_end_date = NaiveDate::from_ymd_opt(
+                end_date_input.year().into(),
+                (end_date_input.month() as u32).into(),
+                end_date_input.day().into(),
+            )
+            .unwrap();
+            end_date = Local
+                .from_local_datetime(&naive_end_date.and_hms_opt(0, 0, 0).unwrap())
+                .single()
+                .unwrap();
+        }
+    };
+    println!("start_date: {:?}", start_date);
+    println!("end_date: {:?}", end_date);
+    // DBを最新情報に更新
+    let _ = put_session(redis_pool, db).await.map_err(|e| e);
+    // upsertの結果を取得
+    let session_count_summaries = SessionCounter::find()
+        .filter(session_counter::Column::UpdatedAt.between(start_date, end_date))
+        .select_only()
+        .column_as(session_counter::Column::Count.sum(), "sum_count")
+        .into_model::<SessionCounterSummary>()
+        .all(db.inner())
+        .await
+        .map_err(|e| {
+            Json(ErrorResponse {
+                error: format!("Failed to execute query: {:?}", e),
+            })
+        })?;
+
+    println!("session_count_summaries: {:?}", session_count_summaries);
+
+    let res = Response {
+        message: "指定期間のクリック数を取得しました".to_string(),
+        result: session_count_summaries[0].clone(),
     };
     Ok(Json(res))
 }
@@ -229,5 +327,5 @@ async fn rocket() -> _ {
     rocket::build()
         .manage(redis_pool)
         .manage(db)
-        .mount("/", routes![post_session, put_session])
+        .mount("/", routes![post_session, put_session, get_count_summary])
 }

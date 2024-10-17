@@ -34,6 +34,8 @@ services:
     image: redis:7.2.3-alpine3.19
     volumes:
       - ./redis-data:/data
+    ports:
+      - 6379:6379
 
   db:
     image: mysql:8.3.0
