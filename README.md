@@ -82,13 +82,10 @@ sequenceDiagram
     participant Redis as Redis
     participant MySQL as MySQL
 
-
-    loop クリック数更新
-        Backend->>+Redis: クリック数カウント取得
-        Redis-->>-Backend: カウントデータ
-        Backend->>+MySQL: クリック数更新
-        MySQL-->>-Backend: 更新確認
-    end
+    Backend->>+Redis: クリック数カウント取得
+    Redis-->>-Backend: カウントデータ
+    Backend->>+MySQL: クリック数更新
+    MySQL-->>-Backend: 更新確認
 ```
 
 ### 画面表示
