@@ -21,7 +21,7 @@ use sea_orm::{
     sea_query::OnConflict,
     sqlx::types::chrono::{self, TimeZone},
     ColumnTrait, Database, DatabaseConnection, DbErr, EntityTrait, FromQueryResult, QueryFilter,
-    QuerySelect,
+    QuerySelect, Set,
 };
 use std::env;
 
