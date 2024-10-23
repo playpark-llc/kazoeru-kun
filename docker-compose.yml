@@ -30,6 +30,17 @@ services:
       - redis
       - db
 
+  frontend2:
+    build: ./app/frontend2
+    tty: true
+    working_dir: /opt/app/frontend2/yew-app
+    volumes:
+      - ./app/frontend2:/opt/app/frontend2
+    ports:
+      - 3001:8080
+    depends_on:
+      - back
+
   redis:
     image: redis:7.2.3-alpine3.19
     volumes:
