@@ -1,16 +1,4 @@
 services:
-  front:
-    build: ./app/frontend
-    tty: true
-    volumes:
-      - ./app/frontend:/opt/app/frontend
-      - node_modules_frontend:/opt/app/frontend/node_modules
-      - pnpm_store_frontend:/opt/app/frontend/.pnpm-store
-    ports:
-      - 3000:3000
-    depends_on:
-      - back
-
   back:
     build: ./app/backend
     command: sh -c "cargo watch -x 'run'"
