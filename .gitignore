@@ -5,7 +5,6 @@ app/backend/src/prisma.rs
 app/frontend/node_modules
 redis-data
 mysql/store
-sea_generated
 
 app/frontend2/yew-app/node_modules
 app/frontend2/yew-app/target
