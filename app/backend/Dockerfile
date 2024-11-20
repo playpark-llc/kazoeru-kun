@@ -1,5 +1,4 @@
-FROM rust:1.77-slim-buster
-# FROM rust:1.79.0-alpine3.20
+FROM rust:1.82.0-slim-bullseye
 RUN apt-get -y update &&\
   apt-get -y --no-install-recommends install pkg-config libssl-dev &&\
   rm -rf /var/lib/apt/lists/
@@ -14,6 +13,7 @@ COPY Cargo.lock .
 COPY migration  ./migration
 COPY src ./src
 COPY entrypoint.sh /
+
 RUN cargo build &&\
   chmod u+x /entrypoint.sh
 CMD ["/bin/sh","-c","/entrypoint.sh"]
