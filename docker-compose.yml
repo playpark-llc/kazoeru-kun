@@ -20,6 +20,7 @@ services:
 
   frontend2:
     build: ./app/frontend2
+    # command: sh -c "npm run dev"
     tty: true
     working_dir: /opt/app/frontend2/yew-app
     volumes:
@@ -34,7 +35,7 @@ services:
     volumes:
       - ./redis-data:/data
     ports:
-      - 6379:6379
+      - 6380:6379
 
   db:
     image: mysql:8.3.0

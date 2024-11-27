@@ -9,4 +9,5 @@ mysql/store
 app/frontend2/yew-app/node_modules
 app/frontend2/yew-app/target
 app/frontend2/yew-app/dist
+app/frontend2/yew-app/src/env.rs
 *.DS_Store
