@@ -1,4 +1,4 @@
-FROM rust:1.82.0-slim-bullseye
+FROM rust:1.82.0-slim
 
 WORKDIR /opt/app/frontend2/yew-app
 
