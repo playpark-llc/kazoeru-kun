@@ -2,3 +2,4 @@
 ./tailwind.css
 ./dist
 ./node_modules
+./src/env.rs
