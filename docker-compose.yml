@@ -18,11 +18,11 @@ services:
       - redis
       - db
 
-  frontend2:
+  frontend:
     build: ./app/frontend
     command: sh -c "npm run dev"
     tty: true
-    working_dir: /opt/app/frontend2/yew-app
+    working_dir: /opt/app/frontend/yew-app
     volumes:
       - ./app/frontend2:/opt/app/frontend2
     ports:

@@ -6,8 +6,8 @@ app/frontend/node_modules
 redis-data
 mysql/store
 
-app/frontend2/yew-app/node_modules
-app/frontend2/yew-app/target
-app/frontend2/yew-app/dist
-app/frontend2/yew-app/src/env.rs
+app/frontend/yew-app/node_modules
+app/frontend/yew-app/target
+app/frontend/yew-app/dist
+app/frontend/yew-app/src/env.rs
 *.DS_Store
