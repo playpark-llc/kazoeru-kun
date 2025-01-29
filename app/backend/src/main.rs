@@ -15,6 +15,7 @@ use rocket::{
     serde::{json::Json, Serialize},
     time::OffsetDateTime,
 };
+use rocket_cors::{AllowedOrigins, CorsOptions};
 use sea_generated::{prelude::SessionCounter, session_counter};
 use sea_orm::{
     prelude::Decimal,
@@ -323,9 +324,20 @@ async fn rocket() -> _ {
     let db: DatabaseConnection = Database::connect(env::var("DATABASE_URL").unwrap())
         .await
         .unwrap();
+    let allowed_origins: Vec<String> = env::var("ALLOWED_ORIGINS")
+        .unwrap()
+        .split(',')
+        .map(|s| s.to_string())
+        .collect();
+    let exact = allowed_origins;
+    let cors = CorsOptions::default()
+        .allowed_origins(AllowedOrigins::some_exact(&exact))
+        .to_cors()
+        .expect("Error while building CORS");
 
     rocket::build()
         .manage(redis_pool)
         .manage(db)
         .mount("/", routes![post_session, put_session, get_count_summary])
+        .attach(cors)
 }
