@@ -13,6 +13,7 @@ CREATE TABLE `count_summary` (
   `count` decimal(10,0) NOT NULL,
   `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `status` enum('DIRTY','UNCLEAN','CLEAN','IMMACULATE','SPOTLESS') COLLATE utf8mb4_general_ci NOT NULL,
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
 ```
@@ -29,6 +30,7 @@ CREATE TABLE `count_summary` (
 | count | decimal(10,0) |  | false |  |  |  |  |
 | created_at | timestamp | CURRENT_TIMESTAMP | false | DEFAULT_GENERATED |  |  |  |
 | updated_at | timestamp | CURRENT_TIMESTAMP | false | DEFAULT_GENERATED on update CURRENT_TIMESTAMP |  |  |  |
+| status | enum('DIRTY','UNCLEAN','CLEAN','IMMACULATE','SPOTLESS') |  | false |  |  |  |  |
 
 ## Constraints
 

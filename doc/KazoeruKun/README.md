@@ -4,7 +4,7 @@
 
 | Name | Columns | Comment | Type |
 | ---- | ------- | ------- | ---- |
-| [count_summary](count_summary.md) | 6 |  | BASE TABLE |
+| [count_summary](count_summary.md) | 7 |  | BASE TABLE |
 | [session_counter](session_counter.md) | 5 |  | BASE TABLE |
 
 ## Relations
