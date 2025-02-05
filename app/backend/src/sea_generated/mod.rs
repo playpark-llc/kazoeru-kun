@@ -3,4 +3,5 @@
 pub mod prelude;
 
 pub mod count_summary;
+pub mod sea_orm_active_enums;
 pub mod session_counter;
