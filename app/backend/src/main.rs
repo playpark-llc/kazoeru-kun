@@ -1,28 +1,24 @@
 mod sea_generated;
 
-use ::chrono::{DateTime, Datelike, Days, DurationRound, Local, NaiveDate, TimeDelta};
 use deadpool_redis::{
     redis::{AsyncCommands, AsyncIter},
-    Config, Connection, Pool, Runtime,
+    Config, Pool, Runtime,
 };
 use futures::stream::StreamExt;
-use rand::distributions::Alphanumeric;
-use rand::{thread_rng, Rng};
-use rocket::State;
+use opt::{
+    create_expiration, create_session_cookie_with_expiration, get_date_range_local,
+    get_redis_connection, DateRange,
+};
 use rocket::{
-    form::FromForm,
-    http::{Cookie, CookieJar},
+    http::CookieJar,
     serde::{json::Json, Serialize},
-    time::OffsetDateTime,
+    State,
 };
 use rocket_cors::{AllowedOrigins, CorsOptions};
 use sea_generated::{prelude::SessionCounter, session_counter};
 use sea_orm::{
-    prelude::Decimal,
-    sea_query::OnConflict,
-    sqlx::types::chrono::{self, TimeZone},
-    ColumnTrait, Database, DatabaseConnection, DbErr, EntityTrait, FromQueryResult, QueryFilter,
-    QuerySelect, Set,
+    prelude::Decimal, sea_query::OnConflict, ColumnTrait, Database, DatabaseConnection, DbErr,
+    EntityTrait, FromQueryResult, QueryFilter, QuerySelect, Set,
 };
 use std::env;
 
@@ -47,39 +43,6 @@ extern crate rocket;
 #[derive(FromQueryResult, Debug, Serialize, Clone)]
 struct SessionCounterSummary {
     sum_count: Decimal,
-}
-
-// cookieの有効期限を取得
-fn create_expiration() -> chrono::DateTime<Local> {
-    // 現在の日付を取得
-    let now = Local::now();
-
-    // 今日の23:59:59を設定
-    Local
-        .with_ymd_and_hms(now.year(), now.month(), now.day() + 1, 0, 0, 0)
-        .unwrap() // 有効な日時であることが確実なのでunwrapを使用
-}
-
-// 期限付きのsession_idをCookieに設定
-fn create_session_cookie_with_expiration(
-    cookies: &CookieJar<'_>,
-    expiration: chrono::DateTime<Local>,
-) -> String {
-    let session_id = generate_session_id();
-
-    // chronoのDateTimeをtime::OffsetDateTimeに変換
-    let offset_expiration = OffsetDateTime::from_unix_timestamp(expiration.timestamp()).unwrap();
-
-    // Cookieを作成し、有効期限を設定
-    let mut cookie = Cookie::new("session", session_id.clone());
-    cookie.set_expires(offset_expiration);
-
-    println!("cookie value: {:?}", cookie.value());
-    println!("cookie expires:{:?}", cookie.expires());
-
-    cookies.add(cookie);
-
-    session_id
 }
 
 #[post("/session")]
@@ -212,67 +175,20 @@ async fn put_session(
     Ok(Json(res))
 }
 
-#[derive(FromForm)]
-struct DateRange {
-    start_date: Option<rocket::time::Date>,
-    end_date: Option<rocket::time::Date>,
-}
-#[get("/count_summary?<date_range..>")]
-async fn get_count_summary(
+#[get("/session_counter?<date_range..>")]
+async fn get_session_counter(
     redis_pool: &State<Pool>,
     db: &State<DatabaseConnection>,
     date_range: Option<DateRange>,
 ) -> Result<Json<Response<SessionCounterSummary>>, Json<ErrorResponse>> {
-    // 期間の指定がない場合は、先週の月曜日から日曜日までの期間を取得
-    let mut start_date: DateTime<Local> = Local::now()
-        .duration_trunc(TimeDelta::days(1))
-        .unwrap()
-        .checked_sub_days(Days::new(
-            (Local::now().weekday().number_from_monday() + 6) as u64,
-        ))
-        .unwrap();
-    let mut end_date: DateTime<Local> = Local::now()
-        .duration_trunc(TimeDelta::days(1))
-        .unwrap()
-        .checked_sub_days(Days::new(
-            (Local::now().weekday().number_from_monday() - 1) as u64,
-        ))
-        .unwrap();
-    if let Some(date_range) = date_range {
-        if let Some(start_date_input) = date_range.start_date {
-            println!("start_date_input: {:?}", start_date_input);
-            let naive_start_date = NaiveDate::from_ymd_opt(
-                start_date_input.year().into(),
-                (start_date_input.month() as u32).into(),
-                start_date_input.day().into(),
-            )
-            .unwrap();
-            start_date = Local
-                .from_local_datetime(&naive_start_date.and_hms_opt(0, 0, 0).unwrap())
-                .single()
-                .unwrap();
-        }
-        if let Some(end_date_input) = date_range.end_date {
-            println!("end_date_input: {:?}", end_date_input);
-            let naive_end_date = NaiveDate::from_ymd_opt(
-                end_date_input.year().into(),
-                (end_date_input.month() as u32).into(),
-                end_date_input.day().into(),
-            )
-            .unwrap();
-            end_date = Local
-                .from_local_datetime(&naive_end_date.and_hms_opt(0, 0, 0).unwrap())
-                .single()
-                .unwrap();
-        }
-    };
-    println!("start_date: {:?}", start_date);
-    println!("end_date: {:?}", end_date);
+    let date_range = get_date_range_local(date_range);
     // DBを最新情報に更新
     let _ = put_session(redis_pool, db).await.map_err(|e| e);
     // upsertの結果を取得
     let session_count_summaries = SessionCounter::find()
-        .filter(session_counter::Column::UpdatedAt.between(start_date, end_date))
+        .filter(
+            session_counter::Column::UpdatedAt.between(date_range.start_date, date_range.end_date),
+        )
         .select_only()
         .column_as(session_counter::Column::Count.sum(), "sum_count")
         .into_model::<SessionCounterSummary>()
@@ -291,22 +207,6 @@ async fn get_count_summary(
         result: session_count_summaries[0].clone(),
     };
     Ok(Json(res))
-}
-
-async fn get_redis_connection(redis_pool: &State<Pool>) -> Connection {
-    match redis_pool.get().await {
-        Ok(con) => con,
-        Err(e) => panic!("Failed to get redis connection: {:?}", e),
-    }
-}
-
-// ランダムなセッションIDを生成する関数
-fn generate_session_id() -> String {
-    thread_rng()
-        .sample_iter(&Alphanumeric)
-        .take(30) // 30文字のランダムな文字列を生成
-        .map(char::from)
-        .collect()
 }
 
 #[launch]
@@ -338,6 +238,6 @@ async fn rocket() -> _ {
     rocket::build()
         .manage(redis_pool)
         .manage(db)
-        .mount("/", routes![post_session, put_session, get_count_summary])
+        .mount("/", routes![post_session, put_session, get_session_counter])
         .attach(cors)
 }
