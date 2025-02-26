@@ -10,4 +10,5 @@ app/frontend/yew-app/node_modules
 app/frontend/yew-app/target
 app/frontend/yew-app/dist
 app/frontend/yew-app/src/env.rs
+app/frontend/yew-app/static/css/tailwind.css
 *.DS_Store
