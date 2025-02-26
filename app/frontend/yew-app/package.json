@@ -4,7 +4,7 @@
   },
   "scripts": {
     "dev": "npm run dev:css & npm run dev:serve",
-    "dev:css": "tailwindcss -c tailwind.config.js -o tailwind.css --watch",
+    "dev:css": "tailwindcss -i ./static/css/app.css -o ./static/css/tailwind.css --watch",
     "dev:serve": "cargo clean && trunk serve --address 0.0.0.0",
     "prod": "npm run prod:css && trunk build --release",
     "prod:css": "tailwindcss -c tailwind.config.js -o tailwind.css --minify"

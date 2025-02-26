@@ -1,6 +1,6 @@
 FROM rust:1.82.0-slim
 
-WORKDIR /opt/app/frontend2/yew-app
+WORKDIR /opt/app/frontend/yew-app
 
 RUN apt update \
   && apt install --no-install-recommends -y libssl-dev pkg-config nodejs npm \

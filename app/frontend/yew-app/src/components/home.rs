@@ -29,21 +29,7 @@ pub fn Home() -> Html {
     };
 
     html! {
-        <div class="w-screen h-screen" style="height: 100vh; background-image:
-            repeating-linear-gradient(
-            90deg,
-            #fff ,
-            #fff 1px,
-            transparent 1px,
-            transparent 20px
-            ),
-            repeating-linear-gradient(
-            0deg,
-            #fff ,
-            #fff 1px,
-            #C0E2D1 1px,
-            #C0E2D1 20px
-            );">
+        <div class="w-screen h-screen bg-primary-check">
             <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -72.2%);">
                 <div class="flex flex-col justify-center items-center space-y-9">
                     <img src="/images/push-me.svg" />

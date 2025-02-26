@@ -1,10 +1,10 @@
 use yew::prelude::*;
 use crate::components::member::member_modal::Modal;
+use crate::components::member::member_types::Member;
 
-#[derive(Properties, PartialEq)]
+#[derive(Properties, PartialEq, Clone)]
 pub struct MemberCardProps {
-    pub name: String,
-    pub role: String,
+    pub member: Member
 }
 
 #[function_component(MemberCard)]
@@ -25,18 +25,16 @@ pub fn member_card(props: &MemberCardProps) -> Html {
     };
 
     html! {
-        <div class="border-2 border-blue-400 p-4 bg-white flex flex-col items-center shadow-lg">
-            <div class="h-32 w-full bg-blue-200 flex items-center justify-center">
-                <span class="text-gray-500">{"ここに画像が入ります"}</span>
+        <div class="border-2 border-blue-400 p-2 bg-white flex flex-col items-center shadow-lg relative">
+            <div class="w-full bg-blue-200 flex items-center justify-center">
+                <img src={props.member.main_image.clone()} />
             </div>
-            <h3 class="mt-4 text-blue-500 text-lg font-semibold">{&props.name}</h3>
-            <p class="text-gray-500">{&props.role}</p>
-            <button onclick={open_modal} class="mt-4 bg-blue-500 text-white rounded-full w-8 h-8 flex items-center justify-center">
+            <button onclick={open_modal} class="mt-4 bg-blue-500 text-white rounded-full w-8 h-8 absolute bottom-4 right-5">
                 <span>{"+"}</span>
             </button>
             // モーダル表示部分
             if *is_modal_open {
-                <Modal {close_modal} />
+                <Modal {close_modal} member={props.member.clone()} />
             }
         </div>
     }
