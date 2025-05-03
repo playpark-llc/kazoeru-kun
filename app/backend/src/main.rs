@@ -47,6 +47,7 @@ extern crate rocket;
 #[derive(FromQueryResult, Debug, Serialize, Clone)]
 struct SessionCounterSummary {
     sum_count: Decimal,
+    status: String,
 }
 
 // cookieの有効期限を取得
@@ -286,9 +287,15 @@ async fn get_count_summary(
 
     println!("session_count_summaries: {:?}", session_count_summaries);
 
+    let result = session_count_summaries[0].clone();
+    let status = calculate_status(&result.sum_count);
+    
     let res = Response {
         message: "指定期間のクリック数を取得しました".to_string(),
-        result: session_count_summaries[0].clone(),
+        result: SessionCounterSummary {
+            sum_count: result.sum_count,
+            status,
+        },
     };
     Ok(Json(res))
 }
@@ -301,6 +308,18 @@ async fn get_redis_connection(redis_pool: &State<Pool>) -> Connection {
 }
 
 // ランダムなセッションIDを生成する関数
+fn calculate_status(sum_count: &Decimal) -> String {
+    if sum_count >= &Decimal::from(1000) {
+        "EXCELLENT".to_string()
+    } else if sum_count >= &Decimal::from(500) {
+        "GOOD".to_string()
+    } else if sum_count >= &Decimal::from(100) {
+        "NORMAL".to_string()
+    } else {
+        "BAD".to_string()
+    }
+}
+
 fn generate_session_id() -> String {
     thread_rng()
         .sample_iter(&Alphanumeric)
