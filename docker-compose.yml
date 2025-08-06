@@ -1,8 +1,8 @@
 services:
   back:
     build: ./app/backend
-    # command: sh -c "cargo watch -x 'run'"
-    command: sh -c
+    command: sh -c "cargo watch -x 'run'"
+    # command: sh -c
     tty: true
     working_dir: /backend
     env_file:
