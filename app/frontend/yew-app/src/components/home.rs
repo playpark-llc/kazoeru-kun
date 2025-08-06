@@ -22,13 +22,7 @@ pub fn Home() -> Html {
 
                 let data = req.text().await.expect("failed to get response");
 
-                // response_data.set(format!("{:?}", data));
-                if req.status().is_success() {
-                    // Cookieは自動的に管理される
-                    Ok(())
-                } else {
-                    Err(format!("failed with status: {}", req.status()))
-                }
+                response_data.set(format!("{:?}", data));
             });
             navigator.push(&Route::PushAfter);
         }
