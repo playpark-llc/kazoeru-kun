@@ -25,13 +25,13 @@ pub fn member_card(props: &MemberCardProps) -> Html {
     };
 
     html! {
-        <div class="border-2 border-blue-400 p-2 bg-white flex flex-col items-center shadow-lg relative">
+        <div class="border-2 border-[#6184C6] p-2 bg-white flex flex-col items-center shadow-lg relative">
             <div class="w-full bg-blue-200 flex items-center justify-center">
                 <img src={props.member.main_image.clone()} />
             </div>
-            <button onclick={open_modal} class="mt-4 bg-blue-500 text-white rounded-full w-8 h-8 absolute bottom-4 right-5">
-                <span>{"+"}</span>
-            </button>
+            <div onclick={open_modal} class="mt-4 bg-[#6184C6] flex justify-center items-center text-white rounded-full w-8 h-8 absolute bottom-4 right-5">
+                <p class="">{"＋"}</p>
+            </div>
             // モーダル表示部分
             if *is_modal_open {
                 <Modal {close_modal} member={props.member.clone()} />

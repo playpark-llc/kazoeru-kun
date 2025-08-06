@@ -22,7 +22,13 @@ pub fn Home() -> Html {
 
                 let data = req.text().await.expect("failed to get response");
 
-                response_data.set(format!("{:?}", data));
+                // response_data.set(format!("{:?}", data));
+                if req.status().is_success() {
+                    // Cookieは自動的に管理される
+                    Ok(())
+                } else {
+                    Err(format!("failed with status: {}", req.status()))
+                }
             });
             navigator.push(&Route::PushAfter);
         }
@@ -33,7 +39,7 @@ pub fn Home() -> Html {
             <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -72.2%);">
                 <div class="flex flex-col justify-center items-center space-y-9">
                     <img src="/images/push-me.svg" />
-                    <a class="w-48" onclick={ push }>
+                    <a class="w-48 hover:-translate-y-1 cursor-pointer" onclick={ push }>
                         <img src="/images/push-btn.svg" />
                     </a>
                 </div>

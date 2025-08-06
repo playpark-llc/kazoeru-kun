@@ -3,55 +3,123 @@ use yew::prelude::*;
 #[function_component]
 pub fn Detail() -> Html {
     html! {
-        <div class="w-full flex">
-            <div class="w-1/2 p-4 bg-green-100">
-                <div class="flex justify-center"><img src="images/menu.svg" /></div>
-                <div class="mt-4 space-y-3">
-                    <button class="w-full bg-white border-2 border-blue-500 shadow-md py-3 px-4 rounded-lg flex justify-between items-center">
-                        {"アプリについて"}
-                    </button>
-                    <button class="w-full bg-white border-2 border-blue-500 shadow-md py-3 px-4 rounded-lg flex justify-between items-center">
-                        {"運営チーム"}
-                    </button>
-                    <button class="w-full bg-white border-2 border-blue-500 shadow-md py-3 px-4 rounded-lg flex justify-between items-center">
-                        {"お問い合わせ"}
-                    </button>
-                </div>
-
-                <div class="mt-6 text-center">
-                    <div class="flex justify-center"><img src="images/news.svg" /></div>
-                    <div class="bg-white border-2 border-blue-500 shadow-md p-4 rounded-lg mt-2">
-                        <h3 class="text-xl font-bold">{"no+e"}</h3>
-                        <p class="text-blue-500 text-sm">{"チーム yaoyoroz"}</p>
-                        <p class="text-lg font-bold text-gray-800">{"研究開発テーマ"}</p>
-                        <a href="#" class="text-blue-500 text-sm mt-2 block">{"記事を読む"}</a>
+        <div class="w-full h-screen flex font-DotGothic">
+            <div class="w-1/2 p-4 bg-green-100 flex justify-center items-center text-blue-500">
+                <div class="w-1/2">
+                    <div class="flex justify-center">
+                        <img src="images/menu.svg" />
                     </div>
-                </div>
+                    <div class="mt-4 space-y-3">
+                        // <button class="w-full bg-white border-2 border-blue-500 shadow-md py-3 px-4 rounded-lg flex justify-between items-center">
+                        //     {"アプリについて"}
+                        // </button>
+                        <a href="/member" class="block">
+                            <div class="relative w-full">
+                                <button class="w-full flex items-center justify-between rounded bg-white px-5 py-3 text-[#6184C6] shadow-md relative z-10 gap-4 border border-[#6184C6]">
+                                    <p class="text-base w-full text-center">{"運営チーム"}</p>
+                                    <div class="absolute right-5 w-4 h-4 border-4 border-gray-600 border-b-transparent border-l-transparent rotate-45"></div>
+                                </button>
+                                <div class="absolute bottom-0 right-0 w-full h-full bg-[#6184C6] rounded translate-x-1 translate-y-1"></div>
+                            </div>
+                        </a>
+                        <a href="https://docs.google.com/forms/d/e/1FAIpQLSdLGxR5WyiUXXVTXl_RLF-NvEDRrMtLdGftFRD6urhvRtNSuQ/viewform?usp=dialog" class="block">
+                            <div class="relative w-full">
+                                <button class="w-full flex items-center justify-between rounded bg-white px-5 py-3 text-[#6184C6] shadow-md relative z-10 gap-4 border border-[#6184C6]">
+                                    <p class="text-base w-full text-center">{"お問い合わせ"}</p>
+                                    <div class="absolute right-5 w-4 h-4 border-4 border-gray-600 border-b-transparent border-l-transparent rotate-45"></div>
+                                </button>
+                                <div class="absolute bottom-0 right-0 w-full h-full bg-[#6184C6] rounded translate-x-1 translate-y-1"></div>
+                            </div>
+                        </a>
+                    </div>
 
-                <div class="mt-6 flex justify-center space-x-4">
-                    <button class="w-12 h-12 bg-white border-2 border-blue-500 shadow-md rounded-full flex items-center justify-center font-bold">
-                        <img src="images/icon-note.svg" />
-                    </button>
-                    <button class="w-12 h-12 bg-white border-2 border-blue-500 shadow-md rounded-full flex items-center justify-center font-bold">
-                        <img src="images/icon-x.svg" />
-                    </button>
+                    <div class="mt-6 text-center">
+                        <div class="flex justify-center">
+                            <img src="images/news.svg" />
+                        </div>
+                        <div class="relative w-full">
+                            <div class="w-full rounded bg-white text-[#6184C6] shadow-md z-10 p-4 mt-2 shadow-lg relative border border-[#6184C6]">
+                                <div class="flex justify-center"><img src="images/note-logo.svg" /></div>
+                                <p class="text-sm text-[#6184C6]">{"チーム yaoyoroz"}</p>
+                                <p class="text-lg font-bold text-[#6184C6]">{"研究開発テーマ"}</p>
+                                <div class="flex justify-end"><a href="https://note.com/yaoyoroz_/" class="text-[#6184C6] text-sm mt-2 block" target="_blank">{"記事を読む"}</a></div>
+                            </div>
+                            <div class="absolute bottom-0 right-0 w-full h-full bg-[#6184C6] rounded translate-x-1 translate-y-1 shadow-lg"></div>
+                        </div>
+                    </div>
+
+                    <div class="mt-6 flex justify-center space-x-4">
+                        <div class="relative">
+                            <button class="w-12 h-12 bg-white border border-[#6184C6] z-10 shadow-md relative rounded-full flex items-center justify-center font-bold">
+                                <a href="https://note.com/yaoyoroz_/" target="_blank"><img src="images/icon-note.svg" /></a>
+                            </button>
+                            <div class="absolute bottom-0 right-0 w-full h-full bg-[#6184C6] rounded-full translate-x-0.5 translate-y-0.5 shadow-lg"></div>
+                        </div>
+                        <div class="relative">
+                            <button class="w-12 h-12 bg-white border border-[#6184C6] z-10 shadow-md relative rounded-full flex items-center justify-center font-bold">
+                                <a href="https://twitter.com/yaoyorozu_team" target="_blank"><img src="images/icon-x.svg" /></a>
+                            </button>
+                            <div class="absolute bottom-0 right-0 w-full h-full bg-[#6184C6] rounded-full translate-x-0.5 translate-y-0.5 shadow-lg"></div>
+                        </div>
+                    </div>
                 </div>
             </div>
 
-            <div class="w-1/2 p-4 bg-blue-200 relative">
-                <div class="absolute top-2 right-2 bg-white p-2 rounded-full shadow-md transform rotate-[-15deg]">
-                    <p class="text-blue-500 font-bold text-sm">{"うざい？"}</p>
+            <div class="bg-[#F5BED3] w-[55px] relative overflow-hidden">
+                <div class="absolute inline-block -rotate-90 text-white inset-0 flex flex-nowrap items-center justify-center text-2xl">
+                    <span class="px-4">{"KAZOERUKUN!!"}</span>
+                    <span class="px-4">{"KAZOERUKUN!!"}</span>
+                    <span class="px-4">{"KAZOERUKUN!!"}</span>
+                    <span class="px-4">{"KAZOERUKUN!!"}</span>
+                    <span class="px-4">{"KAZOERUKUN!!"}</span>
+                    <span class="px-4">{"KAZOERUKUN!!"}</span>
+                    <span class="px-4">{"KAZOERUKUN!!"}</span>
+                    <span class="px-4">{"KAZOERUKUN!!"}</span>
+                    <span class="px-4">{"KAZOERUKUN!!"}</span>
                 </div>
-                <div class="p-6 bg-pink-300 rounded-lg shadow-md">
-                    <h2 class="text-xl font-bold text-blue-500 text-center drop-shadow-md">{"PUSH ME!"}</h2>
-                    <div class="mt-4 p-4 bg-green-200 border-2 border-blue-500 shadow-md rounded-lg text-center">
-                        <p class="text-lg font-bold font-DotGothic">{"昨日までのつんつん数"}</p>
-                        <p class="text-xl text-blue-500 font-bold">{"1,234回"}</p>
-                        <p class="mt-2 text-lg font-bold">{"目標まであと"}</p>
-                        <p class="text-xl text-blue-500 font-bold">{"100つんつん!"}</p>
+            </div>
+
+            <div class="w-1/2 p-4 bg-[#8CB5E1] relative flex justify-center items-center">
+                <div class="absolute top-0 right-0">
+                    <a href="/push">
+                        <img src="images/uzai.svg" />
+                    </a>
+                </div>
+                <div class="w-1/2 h-2/3 px-1 bg-[#F5BED3] rounded-lg relative">
+                    <div class="flex justify-end items-center py-2 pr-4 text-white h-[60px]">
+                        <span class="text-[18px] tracking-widest">{"MENU"}</span>
+                    </div>
+                    <div class="bg-primary-check flex flex-col justify-center items-center absolute inset-0 mt-[60px] mb-[50px] mx-1">
+                        <div class="flex justify-center">{"push me!!"}</div>
+                        <div class="m-4 w-2/3 text-center relative z-10 aspect-square">
+                            <div class="h-full w-full border-2 border-[#6184C6] bg-white rounded flex flex-col p-4">
+                                <div class="text-center mb-2 text-xl">
+                                    <p>{"昨日までの"}</p>
+                                    <p>{"つんつん数"}</p>
+                                    <div class="mt-1">
+                                        <span class="border-b-dashed border-b-pink-300 border-b">
+                                            <span class="text-2xl font-bold text-[#6184C6]">{"1,234"}</span>
+                                            <span class="text-base">{"回"}</span>
+                                        </span>
+                                    </div>
+                                </div>
+                                
+                                <div class="text-center text-2xl">
+                                    <p>{"目標まであと"}</p>
+                                    <p class="font-bold text-[28px]">
+                                        <span class="text-[#6184C6] tracking-widest">{"100"}</span>
+                                        <span class="text-xl">{"つんつん！"}</span>
+                                    </p>
+                                </div>
+                            </div>
+
+                            <div class="absolute inset-0 bg-[#6184C6] rounded transform translate-x-1 translate-y-1 -z-10"></div>
+                        </div>
+                    </div>
+                    <div class="absolute bottom-0 right-0 text-sm text-gray-600 h-[50px] w-full text-white flex justify-center items-center">
+                        {"@yaoyoroz"}
                     </div>
                 </div>
-                <div class="absolute bottom-2 right-4 text-sm text-gray-600">{"@yaoyoroz"}</div>
             </div>
         </div>
     }
