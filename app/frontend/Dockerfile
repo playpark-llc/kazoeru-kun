@@ -10,6 +10,6 @@ RUN apt update \
 COPY ./yew-app/package.json .
 COPY ./yew-app/package-lock.json .
 RUN rustup target add wasm32-unknown-unknown
-RUN cargo install trunk
+RUN cargo install --locked trunk
 
 RUN npm install
