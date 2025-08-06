@@ -1,4 +1,4 @@
-# count_summary
+# status_history
 
 ## Description
 
@@ -6,7 +6,7 @@
 <summary><strong>Table Definition</strong></summary>
 
 ```sql
-CREATE TABLE `count_summary` (
+CREATE TABLE `status_history` (
   `id` int NOT NULL AUTO_INCREMENT,
   `start_date` datetime NOT NULL,
   `end_date` datetime NOT NULL,
@@ -46,7 +46,7 @@ CREATE TABLE `count_summary` (
 
 ## Relations
 
-![er](count_summary.svg)
+![er](status_history.svg)
 
 ---
 

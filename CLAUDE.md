@@ -113,7 +113,7 @@ docker compose exec frontend cargo test
 
 ### Database Schema
 - `session_counter`: Stores session_id and count
-- `count_summary`: Aggregated counts with date ranges and status
+- `status_history`: Status tracking with date ranges (formerly count_summary)
 - Migrations in `app/backend/migration/src/`
 
 ### CORS Configuration

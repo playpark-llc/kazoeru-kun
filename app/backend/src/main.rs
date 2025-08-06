@@ -188,6 +188,7 @@ async fn put_session(
 }
 
 // Backward compatibility: Keep both endpoints
+// Note: Despite the name, this endpoint queries from session_counter table, not status_history (formerly count_summary)
 #[get("/count_summary?<date_range..>")]
 async fn get_count_summary(
     redis_pool: &State<Pool>,
