@@ -182,7 +182,7 @@ async fn put_session(
     }
     let res = Response {
         message: "DBのセッション情報を更新しました".to_string(),
-        result: "Sccsess".to_string(),
+        result: "Success".to_string(),
     };
     Ok(Json(res))
 }

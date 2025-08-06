@@ -1,4 +1,4 @@
-use sea_orm::Statement;
+use sea_orm::{DatabaseBackend, Statement};
 use sea_orm_migration::prelude::*;
 use sea_query::Alias;
 
@@ -15,6 +15,19 @@ pub struct Migration;
 impl MigrationTrait for Migration {
     // マイグレーション適用時の処理
     async fn up(&self, manager: &SchemaManager) -> Result<(), DbErr> {
+        // PostgreSQLの場合は先にENUM型を作成する必要がある
+        // MySQLの場合は列定義内で暗黙的に作成される
+        let db_backend = manager.get_database_backend();
+        if db_backend == DatabaseBackend::Postgres {
+            manager
+                .get_connection()
+                .execute(Statement::from_string(
+                    db_backend,
+                    "CREATE TYPE status_enum AS ENUM ('DIRTY', 'UNCLEAN', 'CLEAN', 'IMMACULATE', 'SPOTLESS')".to_owned(),
+                ))
+                .await?;
+        }
+
         // count_summaryテーブルに status カラムを追加
         manager
             .alter_table(
@@ -52,14 +65,18 @@ impl MigrationTrait for Migration {
             )
             .await?;
 
-        // ENUM型 status_enum の削除
-        manager
-            .get_connection()
-            .execute(Statement::from_string(
-                manager.get_database_backend(),
-                "DROP TYPE status_enum".to_owned(),
-            ))
-            .await?;
+        // PostgreSQLの場合のみENUM型 status_enum を削除
+        // MySQLではENUM型は列と共に自動的に削除される
+        let db_backend = manager.get_database_backend();
+        if db_backend == DatabaseBackend::Postgres {
+            manager
+                .get_connection()
+                .execute(Statement::from_string(
+                    db_backend,
+                    "DROP TYPE IF EXISTS status_enum".to_owned(),
+                ))
+                .await?;
+        }
 
         Ok(())
     }
