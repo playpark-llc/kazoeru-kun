@@ -4,8 +4,8 @@
 
 | Name | Columns | Comment | Type |
 | ---- | ------- | ------- | ---- |
-| [count_summary](count_summary.md) | 7 |  | BASE TABLE |
 | [session_counter](session_counter.md) | 5 |  | BASE TABLE |
+| [status_history](status_history.md) | 7 |  | BASE TABLE |
 
 ## Relations
 
