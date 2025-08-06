@@ -32,8 +32,8 @@ impl MigrationTrait for Migration {
                                     Alias::new("SPOTLESS"),
                                 ],
                             )
-                            .not_null(), // 必要に応じて default 値も設定可能
-                                         // .default("CLEAN")
+                            .not_null()
+                            .default("CLEAN") // 既存データのためデフォルト値を設定
                     )
                     .to_owned(),
             )

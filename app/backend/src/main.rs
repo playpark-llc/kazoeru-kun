@@ -55,7 +55,7 @@ async fn post_session(
     match some_cookie {
         Some(cookie) => {
             // クッキーの有効期限を取得
-            println!("{}, {:?}", cookie.value(), cookie.expires());
+            log::debug!("Cookie: {}, expires: {:?}", cookie.value(), cookie.expires());
             session_id = cookie.value().to_string();
         }
         None => {
@@ -64,7 +64,11 @@ async fn post_session(
         }
     }
     // redisの接続を取得
-    let mut redis_con = get_redis_connection(redis_pool).await;
+    let mut redis_con = get_redis_connection(redis_pool).await.map_err(|e| {
+        Json(ErrorResponse {
+            error: e,
+        })
+    })?;
 
     // redisにセッションIDを保存
     let session_count = redis_con.incr(session_id.clone(), 1).await.map_err(|e| {
@@ -108,7 +112,11 @@ async fn put_session(
     db: &State<DatabaseConnection>,
 ) -> Result<Json<Response<String>>, Json<ErrorResponse>> {
     // redisの接続を取得
-    let mut redis_con = get_redis_connection(redis_pool).await;
+    let mut redis_con = get_redis_connection(redis_pool).await.map_err(|e| {
+        Json(ErrorResponse {
+            error: e,
+        })
+    })?;
 
     // セッションIDのイテレータ取得を保存
     let mut session_id_iter: AsyncIter<String> = redis_con.scan().await.map_err(|e| {
@@ -119,7 +127,11 @@ async fn put_session(
 
     let mut insert_records = vec![];
     while let Some(session_id) = session_id_iter.next().await {
-        let mut redis_con = get_redis_connection(redis_pool).await;
+        let mut redis_con = get_redis_connection(redis_pool).await.map_err(|e| {
+            Json(ErrorResponse {
+                error: e,
+            })
+        })?;
         let insert_record = tokio::spawn(async move {
             let redis_count: i32 = redis_con.get(&session_id).await.unwrap_or(0);
             session_counter::ActiveModel {
@@ -175,8 +187,27 @@ async fn put_session(
     Ok(Json(res))
 }
 
+// Backward compatibility: Keep both endpoints
+#[get("/count_summary?<date_range..>")]
+async fn get_count_summary(
+    redis_pool: &State<Pool>,
+    db: &State<DatabaseConnection>,
+    date_range: Option<DateRange>,
+) -> Result<Json<Response<SessionCounterSummary>>, Json<ErrorResponse>> {
+    get_session_counter_impl(redis_pool, db, date_range).await
+}
+
 #[get("/session_counter?<date_range..>")]
 async fn get_session_counter(
+    redis_pool: &State<Pool>,
+    db: &State<DatabaseConnection>,
+    date_range: Option<DateRange>,
+) -> Result<Json<Response<SessionCounterSummary>>, Json<ErrorResponse>> {
+    get_session_counter_impl(redis_pool, db, date_range).await
+}
+
+// Shared implementation for both endpoints
+async fn get_session_counter_impl(
     redis_pool: &State<Pool>,
     db: &State<DatabaseConnection>,
     date_range: Option<DateRange>,
@@ -200,7 +231,7 @@ async fn get_session_counter(
             })
         })?;
 
-    println!("session_count_summaries: {:?}", session_count_summaries);
+    log::debug!("session_count_summaries: {:?}", session_count_summaries);
 
     let res = Response {
         message: "指定期間のクリック数を取得しました".to_string(),
@@ -211,21 +242,27 @@ async fn get_session_counter(
 
 #[launch]
 async fn rocket() -> _ {
+    // Initialize logger
+    env_logger::init();
+    
     // Configオブジェクトの作成
     let mut cfg = Config::default();
-    println!("cfg: {:?}", cfg);
+    log::debug!("Redis config before url: {:?}", cfg);
     cfg.connection = None;
-    cfg.url = Some(env::var("REDIS_URL").unwrap());
-    println!("cfg: {:?}", cfg);
+    cfg.url = Some(env::var("REDIS_URL")
+        .expect("REDIS_URL environment variable must be set"));
+    log::debug!("Redis config after url: {:?}", cfg);
 
     // プールの作成
-    let redis_pool = cfg.create_pool(Some(Runtime::Tokio1)).unwrap();
+    let redis_pool = cfg.create_pool(Some(Runtime::Tokio1))
+        .expect("Failed to create Redis connection pool");
 
-    let db: DatabaseConnection = Database::connect(env::var("DATABASE_URL").unwrap())
+    let db: DatabaseConnection = Database::connect(env::var("DATABASE_URL")
+        .expect("DATABASE_URL environment variable must be set"))
         .await
-        .unwrap();
+        .expect("Failed to connect to database");
     let allowed_origins: Vec<String> = env::var("ALLOWED_ORIGINS")
-        .unwrap()
+        .expect("ALLOWED_ORIGINS environment variable must be set")
         .split(',')
         .map(|s| s.to_string())
         .collect();
@@ -238,6 +275,6 @@ async fn rocket() -> _ {
     rocket::build()
         .manage(redis_pool)
         .manage(db)
-        .mount("/", routes![post_session, put_session, get_session_counter])
+        .mount("/", routes![post_session, put_session, get_session_counter, get_count_summary])
         .attach(cors)
 }
