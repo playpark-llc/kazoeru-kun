@@ -2,6 +2,7 @@ services:
   back:
     build: ./app/backend
     command: sh -c "cargo watch -x 'run'"
+    # command: sh -c
     tty: true
     working_dir: /backend
     env_file:
@@ -12,6 +13,9 @@ services:
         target: /backend
       - target_backend:/backend/target
       - target_migration:/backend/migration/target
+      - cargo-registry:/usr/local/cargo/registry
+      - cargo-git:/usr/local/cargo/git
+      - target-dir:/opt/app/backend/target
     ports:
       - 8881:8000
     depends_on:
@@ -42,10 +46,10 @@ services:
     command: --default-authentication-plugin=mysql_native_password
     restart: always
     environment:
-      - MYSQL_ROOT_PASSWORD=admin_password
+      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD:-admin_password}
       - MYSQL_DATABASE=KazoeruKun
       - MYSQL_USER=admin
-      - MYSQL_PASSWORD=password
+      - MYSQL_PASSWORD=${MYSQL_PASSWORD:-password}
       - TZ=Asia/Tokyo
     volumes:
       - ./mysql/store:/var/lib/mysql
@@ -99,3 +103,6 @@ volumes:
   node_modules_frontend:
   target_backend:
   target_migration:
+  cargo-registry:
+  cargo-git:
+  target-dir:
