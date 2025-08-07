@@ -1,72 +1,44 @@
+use opt::di::DiContainer;
 use opt::config::AppConfig;
-use opt::repositories::{
-    RedisSessionRepository, SessionRepository,
-    DbSessionCounterRepository, SessionCounterRepository,
-    DbStatusHistoryRepository, StatusHistoryRepository,
-};
 use opt::routes::configure_routes;
-use deadpool_redis::{
-    Config, Runtime,
-};
-use std::sync::Arc;
-use sea_orm::{Database, DatabaseConnection};
 
 #[macro_use]
 extern crate rocket;
-
-
-
-
-
 
 #[launch]
 async fn rocket() -> _ {
     // Initialize logger
     env_logger::init();
+    log::info!("Starting Kazoeru-kun application...");
 
     // Load configuration
-    let app_config = AppConfig::from_env().expect("Failed to load configuration");
+    let app_config = AppConfig::from_env()
+        .expect("Failed to load configuration");
 
-    // Configオブジェクトの作成
-    let mut cfg = Config::default();
-    log::debug!("Redis config before url: {:?}", cfg);
-    cfg.connection = None;
-    cfg.url = Some(app_config.redis.url.clone());
-    log::debug!("Redis config after url: {:?}", cfg);
-
-    // プールの作成
-    let redis_pool = cfg
-        .create_pool(Some(Runtime::Tokio1))
-        .expect("Failed to create Redis connection pool");
-
-    let db: DatabaseConnection = Database::connect(&app_config.database.url)
+    // Build dependency injection container
+    let container = DiContainer::build(app_config)
         .await
-        .expect("Failed to connect to database");
+        .expect("Failed to build dependency injection container");
 
-    let cors = app_config
-        .get_cors_options()
-        .expect("Error while building CORS");
+    // Get CORS configuration
+    let cors = container.get_cors()
+        .expect("Failed to configure CORS");
 
-    // Create repository instances
-    let session_repo: Arc<dyn SessionRepository> = Arc::new(RedisSessionRepository::new(
-        Arc::new(redis_pool.clone()),
-    ));
-    let counter_repo: Arc<dyn SessionCounterRepository> = Arc::new(DbSessionCounterRepository::new(
-        Arc::new(db.clone()),
-    ));
-    let history_repo: Arc<dyn StatusHistoryRepository> = Arc::new(DbStatusHistoryRepository::new(
-        Arc::new(db.clone()),
-    ));
-
+    // Build and configure Rocket application
     rocket::build()
-        .manage(redis_pool)
-        .manage(db)
-        .manage(app_config)
-        .manage(session_repo)
-        .manage(counter_repo)
-        .manage(history_repo)
+        // Manage services for handler injection
+        .manage(container.session_service.clone())
+        .manage(container.status_service.clone())
+        .manage(container.sync_service.clone())
+        // Manage repositories for direct access if needed
+        .manage(container.session_repo.clone())
+        .manage(container.counter_repo.clone())
+        .manage(container.history_repo.clone())
+        // Manage infrastructure components
+        .manage(container.redis_pool.clone())
+        .manage(container.db.clone())
+        .manage(container.config.clone())
+        // Mount routes and attach CORS
         .mount("/", configure_routes())
         .attach(cors)
 }
-
-// Tests are now located in the respective handler modules

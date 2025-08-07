@@ -5,22 +5,17 @@ use crate::models::{
     domain::status_to_string,
     response::{ErrorResponse, PageInfo, Response, StatusHistoryRecord, StatusHistoryResponse},
 };
-use crate::repositories::{SessionCounterRepository, StatusHistoryRepository};
+use crate::repositories::StatusHistoryRepository;
 use crate::services::StatusService;
 use crate::{DateRange, get_date_range_local};
 
 /// PUT /status_history - ステータス履歴の更新
 #[put("/status_history")]
 pub async fn update_status(
-    status_history_repo: &State<Arc<dyn StatusHistoryRepository>>,
-    counter_repo: &State<Arc<dyn SessionCounterRepository>>,
+    status_service: &State<Arc<StatusService>>,
     config: &State<AppConfig>,
 ) -> Result<Json<Response<String>>, Json<ErrorResponse>> {
     // ビジネスロジックはサービス層に委譲
-    let status_service = StatusService::new(
-        status_history_repo.inner().clone(),
-        counter_repo.inner().clone(),
-    );
     
     match status_service.update_weekly_status(config.target_value).await {
         Ok(update_result) => {
@@ -39,15 +34,11 @@ pub async fn update_status(
 #[get("/status_history?<limit>&<offset>&<date_range..>")]
 pub async fn get_history(
     status_history_repo: &State<Arc<dyn StatusHistoryRepository>>,
-    counter_repo: &State<Arc<dyn SessionCounterRepository>>,
+    status_service: &State<Arc<StatusService>>,
     limit: Option<u64>,
     offset: Option<u64>,
     date_range: Option<DateRange>,
 ) -> Result<Json<Response<StatusHistoryResponse>>, Json<ErrorResponse>> {
-    let status_service = StatusService::new(
-        status_history_repo.inner().clone(),
-        counter_repo.inner().clone(),
-    );
     
     // Get the current status (most recent entry)
     let current_status = status_history_repo

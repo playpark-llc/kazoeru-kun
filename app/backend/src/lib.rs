@@ -1,4 +1,5 @@
 pub mod config;
+pub mod di;
 pub mod handlers;
 pub mod models;
 pub mod repositories;
