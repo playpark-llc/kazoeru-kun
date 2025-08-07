@@ -256,9 +256,10 @@ fn get_current_week_range() -> (chrono::DateTime<chrono_tz::Tz>, chrono::DateTim
 
 // Helper function to calculate rank change based on count vs target
 fn calculate_rank_change(count: i64, target: i64) -> i32 {
-    if count >= target * 100 {
+    // Use saturating_mul to prevent overflow
+    if count >= target.saturating_mul(100) {
         3  // 100x target: 3 ranks up
-    } else if count >= target * 10 {
+    } else if count >= target.saturating_mul(10) {
         2  // 10x target: 2 ranks up
     } else if count >= target {
         1  // Above target: 1 rank up
@@ -324,6 +325,7 @@ async fn put_status_history(
     // Get the current status from the database (most recent entry)
     let current_status_result = StatusHistory::find()
         .order_by_desc(status_history::Column::CreatedAt)
+        .limit(1)
         .one(db.inner())
         .await
         .map_err(|e| {
@@ -358,16 +360,22 @@ async fn put_status_history(
         })?;
     
     // If a record already exists for this period, skip insertion
-    if existing_record.is_some() {
-        log::debug!("Status history record already exists for period {} to {}", 
-                   start_date_local.naive_local(), end_date_local.naive_local());
+    if let Some(existing) = existing_record {
+        log::info!("Status history duplicate attempt - Period: {} to {}, Status: {:?}, Count: {}", 
+                  start_date_local.naive_local(), 
+                  end_date_local.naive_local(),
+                  existing.status,
+                  existing.count);
+        
+        // TODO: Add metrics counter when metrics system is implemented
+        // metrics::counter!("status_history.duplicate_attempts").increment(1);
         
         let res = Response {
             message: format!(
-                "Status history already exists for this period (count: {}, target: {})",
-                weekly_count, target_value
+                "Status history already exists for this period (existing status: {:?}, count: {}, target: {})",
+                existing.status, weekly_count, target_value
             ),
-            result: "Skipped".to_string(),
+            result: format!("Skipped - Record exists with status: {:?}", existing.status),
         };
         
         return Ok(Json(res));
@@ -413,6 +421,7 @@ async fn get_status_history(
     // Get the current status (most recent entry)
     let current_status = StatusHistory::find()
         .order_by_desc(status_history::Column::CreatedAt)
+        .limit(1)
         .one(db.inner())
         .await
         .map_err(|e| {
@@ -639,6 +648,51 @@ mod tests {
         // Test from other statuses
         assert_eq!(apply_rank_change(Status::Unclean, 1), Status::Clean);
         assert_eq!(apply_rank_change(Status::Immaculate, -1), Status::Clean);
+    }
+    
+    #[test]
+    fn test_calculate_rank_change_overflow_handling() {
+        // Test with maximum i64 values to ensure overflow protection
+        let max_value = i64::MAX;
+        let large_target = i64::MAX / 10;
+        
+        // These calculations would overflow without saturating_mul
+        // large_target * 100 would overflow, saturates to i64::MAX, so max_value >= i64::MAX is true
+        assert_eq!(calculate_rank_change(max_value, large_target), 3);
+        // When target is i64::MAX, target * 100 saturates to i64::MAX, making max_value >= i64::MAX true
+        assert_eq!(calculate_rank_change(max_value, max_value), 3);
+        
+        // Test with large values that would overflow on multiplication
+        let target_causing_overflow = i64::MAX / 50;
+        // target * 100 would overflow, saturates to i64::MAX
+        assert_eq!(calculate_rank_change(max_value, target_causing_overflow), 3); 
+        
+        // Test edge case where target * 10 would overflow
+        let edge_target = i64::MAX / 11;
+        // target * 100 would overflow, saturates to i64::MAX
+        assert_eq!(calculate_rank_change(max_value, edge_target), 3);
+        
+        // Test edge case where target * 100 would overflow but target * 10 wouldn't
+        let edge_target_100 = i64::MAX / 101;
+        assert_eq!(calculate_rank_change(max_value, edge_target_100), 3); // max_value is 101x target
+        
+        // Test a case where we can verify the overflow protection works correctly
+        // Use a target where multiplications won't overflow
+        let safe_target = 1000000;
+        assert_eq!(calculate_rank_change(999999, safe_target), -1);  // Below target
+        assert_eq!(calculate_rank_change(1000000, safe_target), 1);  // At target
+        assert_eq!(calculate_rank_change(10000000, safe_target), 2); // 10x target
+        assert_eq!(calculate_rank_change(100000000, safe_target), 3); // 100x target
+    }
+    
+    #[test]
+    fn test_calculate_rank_change_boundary_values() {
+        // Test boundary values and edge cases
+        assert_eq!(calculate_rank_change(0, 100), -1); // 0 < 100
+        assert_eq!(calculate_rank_change(100, 0), 3); // 100 >= 0 * 100 (saturates to 0)
+        assert_eq!(calculate_rank_change(0, 0), 3); // 0 >= 0 * 100 (saturates to 0)
+        assert_eq!(calculate_rank_change(-1, 100), -1); // Negative counts (shouldn't happen, but test anyway)
+        assert_eq!(calculate_rank_change(100, -1), 3); // 100 >= -1 * 100 (saturates to i64::MIN)
     }
     
     #[test]
