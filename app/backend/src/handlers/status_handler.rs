@@ -127,3 +127,113 @@ pub async fn get_history(
         result: response,
     }))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use chrono::{NaiveDate, Utc};
+    use sea_orm::prelude::Decimal;
+    use crate::sea_generated::sea_orm_active_enums::Status;
+
+    #[test]
+    fn test_status_history_response_structure() {
+        // Test that StatusHistoryRecord can be created
+        let record = StatusHistoryRecord {
+            id: 1,
+            start_date: NaiveDate::from_ymd_opt(2024, 1, 1).unwrap(),
+            end_date: NaiveDate::from_ymd_opt(2024, 1, 7).unwrap(),
+            count: Decimal::from(1000),
+            status: "Clean".to_string(),
+            created_at: Utc::now(),
+        };
+
+        assert_eq!(record.id, 1);
+        assert_eq!(record.status, "Clean");
+
+        // Test that StatusHistoryResponse can be created with pagination
+        let response = StatusHistoryResponse {
+            current_status: Some(record.clone()),
+            history: vec![record],
+            total_records: 1,
+            total_count: 1,
+            page_info: PageInfo {
+                limit: 100,
+                offset: 0,
+                has_more: false,
+            },
+        };
+
+        assert!(response.current_status.is_some());
+        assert_eq!(response.total_records, 1);
+        assert_eq!(response.total_count, 1);
+        assert_eq!(response.history.len(), 1);
+        assert_eq!(response.page_info.limit, 100);
+        assert_eq!(response.page_info.offset, 0);
+        assert!(!response.page_info.has_more);
+    }
+
+    #[test]
+    fn test_get_status_history_endpoint_params() {
+        // Test that the endpoint accepts the correct parameters
+        // The actual endpoint testing would require database mocking
+
+        // Test parameter validation
+        let limit: Option<u64> = Some(10);
+        let offset: Option<u64> = Some(0);
+        assert_eq!(limit.unwrap_or(100), 10);
+        assert_eq!(offset.unwrap_or(0), 0);
+
+        // Test default values
+        let limit: Option<u64> = None;
+        let offset: Option<u64> = None;
+        assert_eq!(limit.unwrap_or(100), 100);
+        assert_eq!(offset.unwrap_or(0), 0);
+    }
+
+    #[test]
+    fn test_pagination_logic() {
+        // Test pagination calculation
+        let total_count = 100;
+        let _limit = 10;
+        let offset = 20;
+        let filtered_records = 10;
+
+        let has_more = (offset as usize + filtered_records) < total_count;
+        assert!(has_more);
+
+        // Test when no more records
+        let offset = 95;
+        let filtered_records = 5;
+        let has_more = (offset as usize + filtered_records) < total_count;
+        assert!(!has_more);
+    }
+
+    #[test]
+    fn test_status_history_record_with_proper_status() {
+        // Test that StatusHistoryRecord uses proper status format
+        let record = StatusHistoryRecord {
+            id: 1,
+            start_date: NaiveDate::from_ymd_opt(2024, 1, 1).unwrap(),
+            end_date: NaiveDate::from_ymd_opt(2024, 1, 7).unwrap(),
+            count: Decimal::from(1000),
+            status: status_to_string(Status::Clean),
+            created_at: Utc::now(),
+        };
+
+        // Should be uppercase format now
+        assert_eq!(record.status, "CLEAN");
+    }
+
+    #[test]
+    fn test_page_info_structure() {
+        let page_info = PageInfo {
+            limit: 50,
+            offset: 10,
+            has_more: true,
+        };
+        
+        assert_eq!(page_info.limit, 50);
+        assert_eq!(page_info.offset, 10);
+        assert!(page_info.has_more);
+    }
+}

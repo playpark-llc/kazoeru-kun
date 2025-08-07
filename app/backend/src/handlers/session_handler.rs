@@ -117,3 +117,56 @@ async fn get_session_counter_impl(
     };
     Ok(Json(res))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use sea_orm::prelude::Decimal;
+
+    #[test]
+    fn test_session_counter_response_structure() {
+        // Test that SessionCount can be created
+        let session_count = SessionCount { count: 42 };
+        assert_eq!(session_count.count, 42);
+
+        // Test SessionCounterSummary structure
+        let summary = SessionCounterSummary {
+            sum_count: Decimal::from(1000),
+        };
+        assert_eq!(summary.sum_count, Decimal::from(1000));
+    }
+
+    #[test]
+    fn test_session_counter_endpoint_params() {
+        // Test that the endpoint accepts correct parameters
+        use crate::DateRange;
+
+        // Test optional DateRange handling
+        let date_range: Option<DateRange> = None;
+        let processed_range = get_date_range_local(date_range);
+        
+        // Should return a valid date range structure
+        assert!(processed_range.start_date <= processed_range.end_date);
+    }
+
+    #[test]
+    fn test_error_response_structure() {
+        // Test ErrorResponse creation
+        let error = ErrorResponse {
+            error: "Test error message".to_string(),
+        };
+        assert_eq!(error.error, "Test error message");
+    }
+
+    #[test]
+    fn test_response_structure() {
+        // Test generic Response wrapper
+        let response = Response {
+            message: "Test message".to_string(),
+            result: SessionCount { count: 5 },
+        };
+        
+        assert_eq!(response.message, "Test message");
+        assert_eq!(response.result.count, 5);
+    }
+}
