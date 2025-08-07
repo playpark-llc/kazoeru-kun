@@ -6,3 +6,4 @@
 # 0	3	*	*	6	run-parts /etc/periodic/weekly
 # 0	5	1	*	*	run-parts /etc/periodic/monthly
 *	*	*	*	*	curl -X PUT back:8000/session
+0	0	*	*	*	curl -X PUT back:8000/status_history
