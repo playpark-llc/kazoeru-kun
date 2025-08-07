@@ -1,5 +1,5 @@
 use rocket::{Route, routes};
-use crate::handlers::{session_handler, status_handler};
+use crate::handlers::{session_handler, status_handler, health_handler};
 
 /// ルーティング定義を集約
 pub fn configure_routes() -> Vec<Route> {
@@ -12,5 +12,9 @@ pub fn configure_routes() -> Vec<Route> {
         // Status related endpoints
         status_handler::update_status,
         status_handler::get_history,
+        // Health check endpoints
+        health_handler::health_check,
+        health_handler::liveness_probe,
+        health_handler::readiness_probe,
     ]
 }
