@@ -21,7 +21,9 @@ pub struct DateRangeLocal {
 }
 
 pub async fn get_redis_connection(redis_pool: &State<Pool>) -> Result<Connection, String> {
-    redis_pool.get().await
+    redis_pool
+        .get()
+        .await
         .map_err(|e| format!("Failed to get redis connection: {:?}", e))
 }
 
@@ -96,8 +98,11 @@ pub fn get_date_range_local(date_range: Option<DateRange>) -> DateRangeLocal {
             )
             .expect("Failed to create NaiveDate from date components");
             start_date = Local
-                .from_local_datetime(&naive_start_date.and_hms_opt(0, 0, 0)
-                    .expect("Failed to create time with and_hms_opt"))
+                .from_local_datetime(
+                    &naive_start_date
+                        .and_hms_opt(0, 0, 0)
+                        .expect("Failed to create time with and_hms_opt"),
+                )
                 .single()
                 .expect("Failed to convert to Local datetime");
         }
@@ -110,8 +115,11 @@ pub fn get_date_range_local(date_range: Option<DateRange>) -> DateRangeLocal {
             )
             .expect("Failed to create NaiveDate from date components");
             end_date = Local
-                .from_local_datetime(&naive_end_date.and_hms_opt(0, 0, 0)
-                    .expect("Failed to create time with and_hms_opt"))
+                .from_local_datetime(
+                    &naive_end_date
+                        .and_hms_opt(0, 0, 0)
+                        .expect("Failed to create time with and_hms_opt"),
+                )
                 .single()
                 .expect("Failed to convert to Local datetime");
         }
