@@ -57,8 +57,15 @@ impl SessionRepository for RedisSessionRepository {
     async fn get_all_sessions(&self) -> Result<Vec<SessionData>> {
         let mut conn = self.pool.get().await?;
         
-        // First, collect all session keys
-        let keys: Vec<String> = conn.keys("*").await?;
+        // Use SCAN iterator instead of KEYS * to avoid blocking Redis
+        let keys: Vec<String> = {
+            let mut keys = Vec::new();
+            let mut iter = conn.scan_match::<_, String>("*").await?;
+            while let Some(key) = iter.next_item().await {
+                keys.push(key);
+            }
+            keys
+        };
         
         if keys.is_empty() {
             return Ok(Vec::new());

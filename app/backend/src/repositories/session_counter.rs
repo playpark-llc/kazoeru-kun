@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 use chrono::{DateTime, Local, TimeZone};
 use sea_orm::{
-    sea_query::OnConflict, ColumnTrait, DatabaseConnection, EntityTrait, PaginatorTrait,
+    sea_query::OnConflict, ColumnTrait, DatabaseConnection, DatabaseTransaction, EntityTrait, PaginatorTrait,
     QueryFilter, QueryOrder, QuerySelect, Set,
 };
 use std::sync::Arc;
@@ -32,6 +32,11 @@ pub struct CreateSessionCounter {
 pub trait SessionCounterRepository: Send + Sync {
     async fn upsert(&self, data: CreateSessionCounter) -> Result<()>;
     async fn upsert_many(&self, data: Vec<CreateSessionCounter>) -> Result<()>;
+    async fn upsert_many_with_txn(
+        &self,
+        data: Vec<CreateSessionCounter>,
+        txn: &DatabaseTransaction,
+    ) -> Result<()>;
     async fn find_by_session_id(&self, session_id: &str) -> Result<Option<SessionCounterData>>;
     async fn find_by_id(&self, id: i32) -> Result<Option<SessionCounterData>>;
     async fn list(&self, limit: u64, offset: u64) -> Result<(Vec<SessionCounterData>, u64)>;
@@ -118,7 +123,48 @@ impl SessionCounterRepository for DbSessionCounterRepository {
         match result {
             Ok(_) => Ok(()),
             Err(sea_orm::DbErr::RecordNotInserted) => {
-                // This is expected for upsert when all records exist and are updated
+                // RecordNotInserted is expected behavior for upsert operations
+                // when the record already exists and is updated instead of inserted.
+                // This is not an error condition for our use case.
+                Ok(())
+            }
+            Err(e) => Err(RepositoryError::from(e)),
+        }
+    }
+
+    async fn upsert_many_with_txn(
+        &self,
+        data: Vec<CreateSessionCounter>,
+        txn: &DatabaseTransaction,
+    ) -> Result<()> {
+        if data.is_empty() {
+            return Ok(());
+        }
+
+        let active_models: Vec<session_counter::ActiveModel> = data
+            .into_iter()
+            .map(|d| session_counter::ActiveModel {
+                session_id: Set(d.session_id),
+                count: Set(d.count),
+                ..Default::default()
+            })
+            .collect();
+
+        let on_conflict = OnConflict::column(session_counter::Column::SessionId)
+            .update_column(session_counter::Column::Count)
+            .to_owned();
+
+        let result = SessionCounter::insert_many(active_models)
+            .on_conflict(on_conflict)
+            .exec(txn)
+            .await;
+
+        match result {
+            Ok(_) => Ok(()),
+            Err(sea_orm::DbErr::RecordNotInserted) => {
+                // RecordNotInserted is expected behavior for upsert operations
+                // when the record already exists and is updated instead of inserted.
+                // This is not an error condition for our use case.
                 Ok(())
             }
             Err(e) => Err(RepositoryError::from(e)),

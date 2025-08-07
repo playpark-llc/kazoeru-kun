@@ -34,7 +34,7 @@ use sea_generated::{
 };
 use sea_orm::{
     prelude::Decimal, sea_query::OnConflict, ColumnTrait, Database, DatabaseConnection, DbErr,
-    EntityTrait, PaginatorTrait, QueryFilter, QueryOrder, QuerySelect, Set,
+    EntityTrait, PaginatorTrait, QueryFilter, QueryOrder, QuerySelect, Set, TransactionTrait,
 };
 
 #[macro_use]
@@ -104,6 +104,7 @@ async fn post_session(
 async fn put_session(
     session_repo: &State<Arc<dyn SessionRepository>>,
     counter_repo: &State<Arc<dyn SessionCounterRepository>>,
+    db: &State<DatabaseConnection>,
 ) -> Result<Json<Response<String>>, Json<ErrorResponse>> {
     // Redisから全セッション情報を取得
     let sessions = session_repo
@@ -128,13 +129,32 @@ async fn put_session(
         })
         .collect();
 
-    // データベースにupsert
-    counter_repo
-        .upsert_many(insert_records)
+    // トランザクション内でデータベースにupsert
+    let txn = db
+        .begin()
         .await
         .map_err(|e| Json(ErrorResponse {
-            error: format!("Failed to upsert session_counter table: {:?}", e),
+            error: format!("Failed to begin transaction: {:?}", e),
         }))?;
+
+    match counter_repo
+        .upsert_many_with_txn(insert_records, &txn)
+        .await
+    {
+        Ok(_) => {
+            txn.commit()
+                .await
+                .map_err(|e| Json(ErrorResponse {
+                    error: format!("Failed to commit transaction: {:?}", e),
+                }))?;
+        }
+        Err(e) => {
+            let _ = txn.rollback().await;
+            return Err(Json(ErrorResponse {
+                error: format!("Failed to upsert session_counter table: {:?}", e),
+            }));
+        }
+    }
 
     let res = Response {
         message: "DBのセッション情報を更新しました".to_string(),
@@ -300,7 +320,7 @@ async fn get_status_history(
         end_date: s.end_date,
         count: s.count,
         status: status_to_string(s.status),
-        created_at: s.created_at.naive_local(),
+        created_at: s.created_at.with_timezone(&chrono::Utc),
     });
 
     // Apply pagination parameters
@@ -338,7 +358,7 @@ async fn get_status_history(
             end_date: h.end_date,
             count: h.count,
             status: status_to_string(h.status),
-            created_at: h.created_at.naive_local(),
+            created_at: h.created_at.with_timezone(&chrono::Utc),
         })
         .collect();
 
@@ -391,8 +411,7 @@ async fn get_session_counter_impl(
     date_range: Option<DateRange>,
 ) -> Result<Json<Response<SessionCounterSummary>>, Json<ErrorResponse>> {
     let date_range = get_date_range_local(date_range);
-    // DBを最新情報に更新
-    let _ = put_session(session_repo, counter_repo).await.map_err(|e| e);
+    // Note: DB sync is handled by the cron job, not in GET endpoints
     
     // 指定期間の合計を取得
     let sum_count = counter_repo
