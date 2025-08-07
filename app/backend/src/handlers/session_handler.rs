@@ -1,23 +1,20 @@
 use rocket::{get, post, put, http::CookieJar, serde::json::Json, State};
-use sea_orm::DatabaseConnection;
 use std::sync::Arc;
 use crate::models::response::{ErrorResponse, Response, SessionCount, SessionCounterSummary};
-use crate::repositories::{SessionRepository, SessionCounterRepository};
+use crate::repositories::SessionCounterRepository;
 use crate::services::{SessionService, SyncService};
 use crate::{DateRange, get_date_range_local};
 
 /// POST /session - セッションのクリックカウンタをインクリメント
 #[post("/session")]
 pub async fn create_session(
-    session_repo: &State<Arc<dyn SessionRepository>>,
+    session_service: &State<Arc<SessionService>>,
     cookies: &CookieJar<'_>,
 ) -> Result<Json<Response<SessionCount>>, Json<ErrorResponse>> {
     // リクエスト処理とレスポンス返却のみ
     // ビジネスロジックはサービス層に委譲
     
     let session_id = cookies.get("session").map(|cookie| cookie.value());
-    
-    let session_service = SessionService::new(session_repo.inner().clone());
     
     match session_service.increment_session(session_id).await {
         Ok(session_response) => {
@@ -42,16 +39,9 @@ pub async fn create_session(
 /// PUT /session - RedisからMySQLへのセッションデータ同期
 #[put("/session")]
 pub async fn sync_sessions(
-    session_repo: &State<Arc<dyn SessionRepository>>,
-    counter_repo: &State<Arc<dyn SessionCounterRepository>>,
-    db: &State<DatabaseConnection>,
+    sync_service: &State<Arc<SyncService>>,
 ) -> Result<Json<Response<String>>, Json<ErrorResponse>> {
     // ビジネスロジックはサービス層に委譲
-    let sync_service = SyncService::new(
-        session_repo.inner().clone(),
-        counter_repo.inner().clone(),
-        Arc::new(db.inner().clone()),
-    );
     
     match sync_service.sync_sessions_to_database().await {
         Ok(sync_result) => {
@@ -73,26 +63,23 @@ pub async fn sync_sessions(
 /// GET /session_counter - セッションカウンタのサマリを取得
 #[get("/session_counter?<date_range..>")]
 pub async fn get_session_counter(
-    session_repo: &State<Arc<dyn SessionRepository>>,
     counter_repo: &State<Arc<dyn SessionCounterRepository>>,
     date_range: Option<DateRange>,
 ) -> Result<Json<Response<SessionCounterSummary>>, Json<ErrorResponse>> {
-    get_session_counter_impl(session_repo, counter_repo, date_range).await
+    get_session_counter_impl(counter_repo, date_range).await
 }
 
 /// GET /count_summary - 後方互換性のためのエンドポイント
 #[get("/count_summary?<date_range..>")]
 pub async fn get_count_summary(
-    session_repo: &State<Arc<dyn SessionRepository>>,
     counter_repo: &State<Arc<dyn SessionCounterRepository>>,
     date_range: Option<DateRange>,
 ) -> Result<Json<Response<SessionCounterSummary>>, Json<ErrorResponse>> {
-    get_session_counter_impl(session_repo, counter_repo, date_range).await
+    get_session_counter_impl(counter_repo, date_range).await
 }
 
 // 共通実装
 async fn get_session_counter_impl(
-    _session_repo: &State<Arc<dyn SessionRepository>>,
     counter_repo: &State<Arc<dyn SessionCounterRepository>>,
     date_range: Option<DateRange>,
 ) -> Result<Json<Response<SessionCounterSummary>>, Json<ErrorResponse>> {
