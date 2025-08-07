@@ -47,6 +47,40 @@ pub fn get_current_week_range() -> (
     (monday_start, sunday_end)
 }
 
+/// Get the last week range (Monday to Sunday) in Japan time
+pub fn get_last_week_range() -> (
+    chrono::DateTime<chrono_tz::Tz>,
+    chrono::DateTime<chrono_tz::Tz>,
+) {
+    let now_jst = Tokyo.from_utc_datetime(&chrono::Utc::now().naive_utc());
+
+    // Find the Monday of the current week
+    let days_from_monday = match now_jst.weekday() {
+        Weekday::Mon => 0,
+        Weekday::Tue => 1,
+        Weekday::Wed => 2,
+        Weekday::Thu => 3,
+        Weekday::Fri => 4,
+        Weekday::Sat => 5,
+        Weekday::Sun => 6,
+    };
+
+    // Get last week's Monday (7 days before current week's Monday)
+    let last_monday = now_jst - Duration::days(days_from_monday + 7);
+    let last_monday_start = Tokyo
+        .from_local_datetime(
+            &NaiveDate::from_ymd_opt(last_monday.year(), last_monday.month(), last_monday.day())
+                .unwrap()
+                .and_hms_opt(0, 0, 0)
+                .unwrap(),
+        )
+        .unwrap();
+
+    let last_sunday_end = last_monday_start + Duration::days(7) - Duration::seconds(1);
+
+    (last_monday_start, last_sunday_end)
+}
+
 /// Calculate rank change based on count vs target
 pub fn calculate_rank_change(count: i64, target: i64) -> i32 {
     // Use saturating_mul to prevent overflow
