@@ -47,6 +47,23 @@ struct SessionCounterSummary {
     sum_count: Decimal,
 }
 
+#[derive(Debug, Serialize, Clone)]
+struct StatusHistoryRecord {
+    id: i32,
+    start_date: NaiveDate,
+    end_date: NaiveDate,
+    count: Decimal,
+    status: String,
+    created_at: chrono::DateTime<chrono::Utc>,
+}
+
+#[derive(Debug, Serialize)]
+struct StatusHistoryResponse {
+    current_status: Option<StatusHistoryRecord>,
+    history: Vec<StatusHistoryRecord>,
+    total_records: usize,
+}
+
 #[post("/session")]
 async fn post_session(
     redis_pool: &State<Pool>,
@@ -368,6 +385,84 @@ async fn put_status_history(
     Ok(Json(res))
 }
 
+#[get("/status_history?<date_range..>")]
+async fn get_status_history(
+    db: &State<DatabaseConnection>,
+    date_range: Option<DateRange>,
+) -> Result<Json<Response<StatusHistoryResponse>>, Json<ErrorResponse>> {
+    // Get the current status (most recent entry)
+    let current_status = StatusHistory::find()
+        .order_by_desc(status_history::Column::CreatedAt)
+        .one(db.inner())
+        .await
+        .map_err(|e| {
+            Json(ErrorResponse {
+                error: format!("Failed to get current status: {:?}", e),
+            })
+        })?;
+    
+    // Convert current status to response format
+    let current_status_record = current_status.map(|s| StatusHistoryRecord {
+        id: s.id,
+        start_date: s.start_date.date(),
+        end_date: s.end_date.date(),
+        count: s.count,
+        status: format!("{:?}", s.status),
+        created_at: s.created_at,
+    });
+    
+    // Build query for historical records
+    let mut query = StatusHistory::find();
+    
+    // Apply date range filter if provided
+    if let Some(range) = date_range {
+        let date_range = get_date_range_local(Some(range));
+        query = query.filter(
+            status_history::Column::StartDate.gte(date_range.start_date.date_naive())
+                .and(status_history::Column::EndDate.lte(date_range.end_date.date_naive()))
+        );
+    }
+    
+    // Get historical records ordered by date
+    let history_records = query
+        .order_by_desc(status_history::Column::StartDate)
+        .all(db.inner())
+        .await
+        .map_err(|e| {
+            Json(ErrorResponse {
+                error: format!("Failed to get status history: {:?}", e),
+            })
+        })?;
+    
+    // Convert to response format
+    let history: Vec<StatusHistoryRecord> = history_records
+        .into_iter()
+        .map(|h| StatusHistoryRecord {
+            id: h.id,
+            start_date: h.start_date.date(),
+            end_date: h.end_date.date(),
+            count: h.count,
+            status: format!("{:?}", h.status),
+            created_at: h.created_at,
+        })
+        .collect();
+    
+    let total_records = history.len();
+    
+    let response = StatusHistoryResponse {
+        current_status: current_status_record,
+        history,
+        total_records,
+    };
+    
+    let res = Response {
+        message: "ステータス履歴を取得しました".to_string(),
+        result: response,
+    };
+    
+    Ok(Json(res))
+}
+
 // Backward compatibility: Keep both endpoints
 // Note: Despite the name, this endpoint queries from session_counter table, not status_history (formerly count_summary)
 #[get("/count_summary?<date_range..>")]
@@ -457,7 +552,7 @@ async fn rocket() -> _ {
     rocket::build()
         .manage(redis_pool)
         .manage(db)
-        .mount("/", routes![post_session, put_session, put_status_history, get_session_counter, get_count_summary])
+        .mount("/", routes![post_session, put_session, put_status_history, get_status_history, get_session_counter, get_count_summary])
         .attach(cors)
 }
 
@@ -529,5 +624,34 @@ mod tests {
         // Check that the range is exactly 7 days
         let duration = end - start;
         assert_eq!(duration.num_days(), 6); // 6 full days + 23:59:59
+    }
+    
+    #[test]
+    fn test_status_history_response_structure() {
+        use chrono::Utc;
+        
+        // Test that StatusHistoryRecord can be created
+        let record = StatusHistoryRecord {
+            id: 1,
+            start_date: NaiveDate::from_ymd_opt(2024, 1, 1).unwrap(),
+            end_date: NaiveDate::from_ymd_opt(2024, 1, 7).unwrap(),
+            count: Decimal::from(1000),
+            status: "Clean".to_string(),
+            created_at: Utc::now(),
+        };
+        
+        assert_eq!(record.id, 1);
+        assert_eq!(record.status, "Clean");
+        
+        // Test that StatusHistoryResponse can be created
+        let response = StatusHistoryResponse {
+            current_status: Some(record.clone()),
+            history: vec![record],
+            total_records: 1,
+        };
+        
+        assert!(response.current_status.is_some());
+        assert_eq!(response.total_records, 1);
+        assert_eq!(response.history.len(), 1);
     }
 }
