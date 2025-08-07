@@ -15,12 +15,14 @@ use rocket::{
     State,
 };
 use rocket_cors::{AllowedOrigins, CorsOptions};
-use sea_generated::{prelude::SessionCounter, session_counter};
+use sea_generated::{prelude::{SessionCounter, StatusHistory}, session_counter, status_history, sea_orm_active_enums::Status};
 use sea_orm::{
     prelude::Decimal, sea_query::OnConflict, ColumnTrait, Database, DatabaseConnection, DbErr,
-    EntityTrait, FromQueryResult, QueryFilter, QuerySelect, Set,
+    EntityTrait, FromQueryResult, QueryFilter, QuerySelect, Set, QueryOrder,
 };
 use std::env;
+use chrono::{Datelike, Duration, Local, NaiveDate, Weekday, TimeZone};
+use chrono_tz::Asia::Tokyo;
 
 #[derive(Serialize)]
 struct SessionCount {
@@ -187,6 +189,157 @@ async fn put_session(
     Ok(Json(res))
 }
 
+// Helper function to get the current week range (Monday to Sunday) in Japan time
+fn get_current_week_range() -> (chrono::DateTime<chrono_tz::Tz>, chrono::DateTime<chrono_tz::Tz>) {
+    let now_jst = Tokyo.from_utc_datetime(&chrono::Utc::now().naive_utc());
+    
+    // Find the Monday of the current week
+    let days_from_monday = match now_jst.weekday() {
+        Weekday::Mon => 0,
+        Weekday::Tue => 1,
+        Weekday::Wed => 2,
+        Weekday::Thu => 3,
+        Weekday::Fri => 4,
+        Weekday::Sat => 5,
+        Weekday::Sun => 6,
+    };
+    
+    let monday = now_jst - Duration::days(days_from_monday);
+    let monday_start = Tokyo.from_local_datetime(
+        &NaiveDate::from_ymd_opt(monday.year(), monday.month(), monday.day())
+            .unwrap()
+            .and_hms_opt(0, 0, 0)
+            .unwrap()
+    ).unwrap();
+    
+    let sunday_end = monday_start + Duration::days(7) - Duration::seconds(1);
+    
+    (monday_start, sunday_end)
+}
+
+// Helper function to calculate rank change based on count vs target
+fn calculate_rank_change(count: i64, target: i64) -> i32 {
+    if count >= target * 100 {
+        3  // 100x target: 3 ranks up
+    } else if count >= target * 10 {
+        2  // 10x target: 2 ranks up
+    } else if count >= target {
+        1  // Above target: 1 rank up
+    } else {
+        -1 // Below target: 1 rank down
+    }
+}
+
+// Helper function to apply rank change to status
+fn apply_rank_change(current_status: Status, rank_change: i32) -> Status {
+    let status_order = vec![
+        Status::Dirty,
+        Status::Unclean,
+        Status::Clean,
+        Status::Immaculate,
+        Status::Spotless,
+    ];
+    
+    let current_index = status_order.iter().position(|s| *s == current_status).unwrap_or(2); // Default to Clean
+    let new_index = (current_index as i32 + rank_change).max(0).min(4) as usize;
+    
+    status_order[new_index].clone()
+}
+
+#[put("/status_history")]
+async fn put_status_history(
+    db: &State<DatabaseConnection>,
+) -> Result<Json<Response<String>>, Json<ErrorResponse>> {
+    // Get target value from environment variable (default: 100000)
+    let target_value: i64 = env::var("TARGET_VALUE")
+        .unwrap_or_else(|_| "100000".to_string())
+        .parse()
+        .unwrap_or(100000);
+    
+    // Get current week range in Japan time
+    let (week_start, week_end) = get_current_week_range();
+    
+    // Convert to Local timezone for database query
+    let start_date_local = Local.from_utc_datetime(&week_start.naive_utc());
+    let end_date_local = Local.from_utc_datetime(&week_end.naive_utc());
+    
+    // Calculate the sum of session counts for the current week
+    let session_count_result = SessionCounter::find()
+        .filter(
+            session_counter::Column::UpdatedAt.between(start_date_local, end_date_local),
+        )
+        .select_only()
+        .column_as(session_counter::Column::Count.sum(), "sum_count")
+        .into_model::<SessionCounterSummary>()
+        .all(db.inner())
+        .await
+        .map_err(|e| {
+            Json(ErrorResponse {
+                error: format!("Failed to calculate weekly count: {:?}", e),
+            })
+        })?;
+    
+    let weekly_count = session_count_result
+        .first()
+        .and_then(|r| r.sum_count.to_string().parse::<i64>().ok())
+        .unwrap_or(0);
+    
+    log::debug!("Weekly count: {}, Target: {}", weekly_count, target_value);
+    
+    // Get the current status from the database (most recent entry)
+    let current_status_result = StatusHistory::find()
+        .order_by_desc(status_history::Column::CreatedAt)
+        .one(db.inner())
+        .await
+        .map_err(|e| {
+            Json(ErrorResponse {
+                error: format!("Failed to get current status: {:?}", e),
+            })
+        })?;
+    
+    let current_status = current_status_result
+        .map(|r| r.status)
+        .unwrap_or(Status::Clean); // Default to Clean if no previous status
+    
+    // Calculate rank change
+    let rank_change = calculate_rank_change(weekly_count, target_value);
+    
+    // Apply rank change to get new status
+    let new_status = apply_rank_change(current_status.clone(), rank_change);
+    
+    log::debug!("Current status: {:?}, Rank change: {}, New status: {:?}", 
+               current_status, rank_change, new_status);
+    
+    // Insert new status history record
+    let new_record = status_history::ActiveModel {
+        start_date: Set(start_date_local.naive_local()),
+        end_date: Set(end_date_local.naive_local()),
+        count: Set(Decimal::from(weekly_count)),
+        status: Set(new_status.clone()),
+        ..Default::default()
+    };
+    
+    StatusHistory::insert(new_record)
+        .exec(db.inner())
+        .await
+        .map_err(|e| {
+            Json(ErrorResponse {
+                error: format!("Failed to insert status history: {:?}", e),
+            })
+        })?;
+    
+    let res = Response {
+        message: format!(
+            "Status updated from {:?} to {:?} (count: {}, target: {}, change: {})",
+            current_status, new_status, weekly_count, target_value, 
+            if rank_change > 0 { format!("+{}", rank_change) } else { rank_change.to_string() }
+        ),
+        result: "Success".to_string(),
+    };
+    
+    Ok(Json(res))
+}
+
 // Backward compatibility: Keep both endpoints
 // Note: Despite the name, this endpoint queries from session_counter table, not status_history (formerly count_summary)
 #[get("/count_summary?<date_range..>")]
@@ -276,6 +429,77 @@ async fn rocket() -> _ {
     rocket::build()
         .manage(redis_pool)
         .manage(db)
-        .mount("/", routes![post_session, put_session, get_session_counter, get_count_summary])
+        .mount("/", routes![post_session, put_session, put_status_history, get_session_counter, get_count_summary])
         .attach(cors)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use chrono::Timelike;
+    
+    #[test]
+    fn test_calculate_rank_change() {
+        let target = 100000;
+        
+        // Test below target
+        assert_eq!(calculate_rank_change(50000, target), -1);
+        assert_eq!(calculate_rank_change(99999, target), -1);
+        
+        // Test at or above target (1 rank up)
+        assert_eq!(calculate_rank_change(100000, target), 1);
+        assert_eq!(calculate_rank_change(500000, target), 1);
+        assert_eq!(calculate_rank_change(999999, target), 1);
+        
+        // Test 10x target (2 ranks up)
+        assert_eq!(calculate_rank_change(1000000, target), 2);
+        assert_eq!(calculate_rank_change(5000000, target), 2);
+        assert_eq!(calculate_rank_change(9999999, target), 2);
+        
+        // Test 100x target (3 ranks up)
+        assert_eq!(calculate_rank_change(10000000, target), 3);
+        assert_eq!(calculate_rank_change(50000000, target), 3);
+    }
+    
+    #[test]
+    fn test_apply_rank_change() {
+        // Test rank up from Clean
+        assert_eq!(apply_rank_change(Status::Clean, 1), Status::Immaculate);
+        assert_eq!(apply_rank_change(Status::Clean, 2), Status::Spotless);
+        assert_eq!(apply_rank_change(Status::Clean, 3), Status::Spotless); // Capped at Spotless
+        
+        // Test rank down from Clean
+        assert_eq!(apply_rank_change(Status::Clean, -1), Status::Unclean);
+        assert_eq!(apply_rank_change(Status::Clean, -2), Status::Dirty);
+        assert_eq!(apply_rank_change(Status::Clean, -3), Status::Dirty); // Capped at Dirty
+        
+        // Test boundary conditions
+        assert_eq!(apply_rank_change(Status::Dirty, -1), Status::Dirty); // Can't go below Dirty
+        assert_eq!(apply_rank_change(Status::Spotless, 1), Status::Spotless); // Can't go above Spotless
+        
+        // Test from other statuses
+        assert_eq!(apply_rank_change(Status::Unclean, 1), Status::Clean);
+        assert_eq!(apply_rank_change(Status::Immaculate, -1), Status::Clean);
+    }
+    
+    #[test]
+    fn test_get_current_week_range() {
+        let (start, end) = get_current_week_range();
+        
+        // Check that start is a Monday at 00:00:00
+        assert_eq!(start.weekday(), Weekday::Mon);
+        assert_eq!(start.hour(), 0);
+        assert_eq!(start.minute(), 0);
+        assert_eq!(start.second(), 0);
+        
+        // Check that end is a Sunday at 23:59:59
+        assert_eq!(end.weekday(), Weekday::Sun);
+        assert_eq!(end.hour(), 23);
+        assert_eq!(end.minute(), 59);
+        assert_eq!(end.second(), 59);
+        
+        // Check that the range is exactly 7 days
+        let duration = end - start;
+        assert_eq!(duration.num_days(), 6); // 6 full days + 23:59:59
+    }
 }
