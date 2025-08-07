@@ -77,47 +77,49 @@ impl StatusService {
             new_status
         );
         
-        // 先週の記録が既に存在するかチェック
-        let existing_records = self.status_history_repo
-            .find_by_date_range(start_date_local, end_date_local)
+        // 全ての既存レコードを取得して重複チェック
+        let all_existing_records = self.status_history_repo
+            .list(1000, 0)  // 十分な数を取得
             .await?;
         
-        let existing_record = existing_records.into_iter().find(|r| 
-            r.start_date == start_date_local.naive_local().date() && 
-            r.end_date == end_date_local.naive_local().date()
-        );
+        // 現在の計算対象期間（先週）
+        let target_week_start = start_date_local.naive_local().date();
+        let target_week_end = end_date_local.naive_local().date();
         
-        // 重複チェック
-        if let Some(existing) = existing_record {
-            log::info!(
-                "Status history duplicate attempt - Period: {} to {}, Status: {:?}, Count: {}",
-                start_date_local.naive_local(),
-                end_date_local.naive_local(),
-                existing.status,
-                existing.count
-            );
-            
-            let existing_status = existing.status.clone();
-            return Ok(StatusUpdateResult {
-                week_start: start_date_local,
-                week_end: end_date_local,
-                weekly_count,
-                target_value,
-                previous_status: format!("{:?}", current_status),
-                new_status: format!("{:?}", existing_status),
-                rank_change,
-                message: format!(
-                    "Status history already exists for this period (existing status: {:?}, count: {}, target: {})",
-                    existing_status, weekly_count, target_value
-                ),
-                was_duplicate: true,
-            });
+        // 既存レコードの中で、計算対象期間が既にカバーされているかチェック
+        for record in all_existing_records.0 {
+            // 既存レコードの期間内に、現在の計算対象期間（先週）が含まれているかチェック
+            if record.start_date <= target_week_start && target_week_end <= record.end_date {
+                log::info!(
+                    "Status history already covers this period - Existing: {} to {}, Target: {} to {}, Status: {:?}",
+                    record.start_date,
+                    record.end_date,
+                    target_week_start,
+                    target_week_end,
+                    record.status
+                );
+                
+                return Ok(StatusUpdateResult {
+                    week_start: start_date_local,
+                    week_end: end_date_local,
+                    weekly_count,
+                    target_value,
+                    previous_status: format!("{:?}", current_status),
+                    new_status: format!("{:?}", record.status),
+                    rank_change,
+                    message: format!(
+                        "Status history already exists for period {} to {} (covered by {} to {})",
+                        target_week_start, target_week_end, record.start_date, record.end_date
+                    ),
+                    was_duplicate: true,
+                });
+            }
         }
         
         // 新しいステータス履歴レコードを挿入
         let new_record = CreateStatusHistory {
-            start_date: start_date_local.naive_local().date(),
-            end_date: end_date_local.naive_local().date(),
+            start_date: target_week_start,
+            end_date: target_week_end,
             count: Decimal::from(weekly_count),
             status: new_status.clone(),
         };
@@ -328,16 +330,108 @@ mod tests {
 
     #[tokio::test]
     async fn test_duplicate_status_update() {
-        let status_repo = Arc::new(MockStatusHistoryRepository::new());
-        let counter_repo = Arc::new(MockSessionCounterRepository::new());
-        let service = StatusService::new(status_repo.clone(), counter_repo);
+        // カスタムMockRepositoryを作成して、期間の重複をテスト
+        struct MockStatusHistoryRepositoryWithData {
+            records: Arc<Mutex<Vec<crate::repositories::status_history::StatusHistoryData>>>,
+            next_id: Arc<Mutex<i32>>,
+        }
 
-        // 最初の更新
-        let result1 = service.update_weekly_status(1500).await.unwrap();
-        assert!(!result1.was_duplicate);
+        impl MockStatusHistoryRepositoryWithData {
+            fn new() -> Self {
+                Self {
+                    records: Arc::new(Mutex::new(Vec::new())),
+                    next_id: Arc::new(Mutex::new(1)),
+                }
+            }
+
+            fn add_existing_record(&self, start_date: chrono::NaiveDate, end_date: chrono::NaiveDate) {
+                let mut records = self.records.lock().unwrap();
+                records.push(crate::repositories::status_history::StatusHistoryData {
+                    id: 1,
+                    start_date,
+                    end_date,
+                    count: Decimal::from(1000),
+                    status: Status::Clean,
+                    created_at: Local::now(),
+                    updated_at: Local::now(),
+                });
+            }
+        }
+
+        #[async_trait]
+        impl StatusHistoryRepository for MockStatusHistoryRepositoryWithData {
+            async fn create(&self, data: CreateStatusHistory) -> Result<crate::repositories::status_history::StatusHistoryData, RepositoryError> {
+                let mut records = self.records.lock().unwrap();
+                let mut next_id = self.next_id.lock().unwrap();
+                
+                let id = *next_id;
+                *next_id += 1;
+                
+                let record = crate::repositories::status_history::StatusHistoryData {
+                    id,
+                    start_date: data.start_date,
+                    end_date: data.end_date,
+                    count: data.count,
+                    status: data.status,
+                    created_at: Local::now(),
+                    updated_at: Local::now(),
+                };
+                
+                records.push(record.clone());
+                Ok(record)
+            }
+
+            async fn find_by_id(&self, _id: i32) -> Result<Option<crate::repositories::status_history::StatusHistoryData>, RepositoryError> {
+                unimplemented!()
+            }
+
+            async fn find_by_date_range(&self, _start: DateTime<Local>, _end: DateTime<Local>) -> Result<Vec<crate::repositories::status_history::StatusHistoryData>, RepositoryError> {
+                Ok(Vec::new())
+            }
+
+            async fn list(&self, _limit: u64, _offset: u64) -> Result<(Vec<crate::repositories::status_history::StatusHistoryData>, u64), RepositoryError> {
+                let records = self.records.lock().unwrap();
+                Ok((records.clone(), records.len() as u64))
+            }
+
+            async fn list_by_date_range(&self, _start: DateTime<Local>, _end: DateTime<Local>, _limit: u64, _offset: u64) -> Result<(Vec<crate::repositories::status_history::StatusHistoryData>, u64), RepositoryError> {
+                unimplemented!()
+            }
+
+            async fn get_latest(&self) -> Result<Option<crate::repositories::status_history::StatusHistoryData>, RepositoryError> {
+                let records = self.records.lock().unwrap();
+                Ok(records.last().cloned())
+            }
+
+            async fn update_status(&self, _id: i32, _status: Status) -> Result<(), RepositoryError> {
+                unimplemented!()
+            }
+
+            async fn delete(&self, _id: i32) -> Result<(), RepositoryError> {
+                unimplemented!()
+            }
+        }
+
+        let status_repo = Arc::new(MockStatusHistoryRepositoryWithData::new());
+        let counter_repo = Arc::new(MockSessionCounterRepository::new());
         
-        // 重複更新（同じ週）
-        let result2 = service.update_weekly_status(1500).await.unwrap();
-        assert!(result2.was_duplicate);
+        // 既存のレコードを追加（先週の期間を含む大きな期間）
+        let (week_start, week_end) = get_last_week_range();
+        let start_date = Local.from_utc_datetime(&week_start.naive_utc()).naive_local().date();
+        let end_date = Local.from_utc_datetime(&week_end.naive_utc()).naive_local().date();
+        
+        // より大きな期間のレコードを作成（先週を含む）
+        status_repo.add_existing_record(
+            start_date - chrono::Duration::days(7),
+            end_date + chrono::Duration::days(7)
+        );
+
+        let service = StatusService::new(status_repo.clone(), counter_repo);
+        
+        // 重複チェックのテスト
+        let result = service.update_weekly_status(1500).await.unwrap();
+        assert!(result.was_duplicate);
+        assert!(result.message.contains("already exists"));
     }
+
 }
