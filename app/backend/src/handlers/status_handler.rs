@@ -1,5 +1,3 @@
-use rocket::{get, put, serde::json::Json, State};
-use std::sync::Arc;
 use crate::config::AppConfig;
 use crate::models::{
     domain::status_to_string,
@@ -7,7 +5,9 @@ use crate::models::{
 };
 use crate::repositories::StatusHistoryRepository;
 use crate::services::StatusService;
-use crate::{DateRange, get_date_range_local};
+use crate::{get_date_range_local, DateRange};
+use rocket::{get, put, serde::json::Json, State};
+use std::sync::Arc;
 
 /// PUT /status_history - ステータス履歴の更新
 #[put("/status_history")]
@@ -16,16 +16,17 @@ pub async fn update_status(
     config: &State<AppConfig>,
 ) -> Result<Json<Response<String>>, Json<ErrorResponse>> {
     // ビジネスロジックはサービス層に委譲
-    
-    match status_service.update_weekly_status(config.target_value).await {
-        Ok(update_result) => {
-            Ok(Json(Response {
-                message: update_result.message,
-                result: "Success".to_string(),
-            }))
-        }
+
+    match status_service
+        .update_weekly_status(config.target_value)
+        .await
+    {
+        Ok(update_result) => Ok(Json(Response {
+            message: update_result.message,
+            result: "Success".to_string(),
+        })),
         Err(e) => Err(Json(ErrorResponse {
-            error: format!("Failed to update status: {:?}", e),
+            error: format!("Failed to update status: {e:?}"),
         })),
     }
 }
@@ -39,16 +40,12 @@ pub async fn get_history(
     offset: Option<u64>,
     date_range: Option<DateRange>,
 ) -> Result<Json<Response<StatusHistoryResponse>>, Json<ErrorResponse>> {
-    
     // Get the current status (most recent entry)
-    let current_status = status_history_repo
-        .get_latest()
-        .await
-        .map_err(|e| {
-            Json(ErrorResponse {
-                error: format!("Failed to get current status: {:?}", e),
-            })
-        })?;
+    let current_status = status_history_repo.get_latest().await.map_err(|e| {
+        Json(ErrorResponse {
+            error: format!("Failed to get current status: {e:?}"),
+        })
+    })?;
 
     // Convert current status to response format
     let current_status_record = current_status.map(|s| StatusHistoryRecord {
@@ -72,18 +69,15 @@ pub async fn get_history(
             .await
             .map_err(|e| {
                 Json(ErrorResponse {
-                    error: format!("Failed to get status history: {:?}", e),
+                    error: format!("Failed to get status history: {e:?}"),
                 })
             })?
     } else {
-        status_history_repo
-            .list(limit, offset)
-            .await
-            .map_err(|e| {
-                Json(ErrorResponse {
-                    error: format!("Failed to get status history: {:?}", e),
-                })
-            })?
+        status_history_repo.list(limit, offset).await.map_err(|e| {
+            Json(ErrorResponse {
+                error: format!("Failed to get status history: {e:?}"),
+            })
+        })?
     };
 
     // Convert to response format
@@ -122,9 +116,9 @@ pub async fn get_history(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::sea_generated::sea_orm_active_enums::Status;
     use chrono::{NaiveDate, Utc};
     use sea_orm::prelude::Decimal;
-    use crate::sea_generated::sea_orm_active_enums::Status;
 
     #[test]
     fn test_status_history_response_structure() {
@@ -222,7 +216,7 @@ mod tests {
             offset: 10,
             has_more: true,
         };
-        
+
         assert_eq!(page_info.limit, 50);
         assert_eq!(page_info.offset, 10);
         assert!(page_info.has_more);

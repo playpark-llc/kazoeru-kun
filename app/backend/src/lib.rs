@@ -33,7 +33,7 @@ pub async fn get_redis_connection(redis_pool: &State<Pool>) -> Result<Connection
     redis_pool
         .get()
         .await
-        .map_err(|e| format!("Failed to get redis connection: {:?}", e))
+        .map_err(|e| format!("Failed to get redis connection: {e:?}"))
 }
 
 // ランダムなセッションIDを生成する関数
@@ -101,8 +101,8 @@ pub fn get_date_range_local(date_range: Option<DateRange>) -> DateRangeLocal {
         if let Some(start_date_input) = date_range.start_date {
             log::debug!("start_date_input: {:?}", start_date_input);
             let naive_start_date = NaiveDate::from_ymd_opt(
-                start_date_input.year().into(),
-                (start_date_input.month() as u32).into(),
+                start_date_input.year(),
+                start_date_input.month() as u32,
                 start_date_input.day().into(),
             )
             .expect("Failed to create NaiveDate from date components");
@@ -118,8 +118,8 @@ pub fn get_date_range_local(date_range: Option<DateRange>) -> DateRangeLocal {
         if let Some(end_date_input) = date_range.end_date {
             log::debug!("end_date_input: {:?}", end_date_input);
             let naive_end_date = NaiveDate::from_ymd_opt(
-                end_date_input.year().into(),
-                (end_date_input.month() as u32).into(),
+                end_date_input.year(),
+                end_date_input.month() as u32,
                 end_date_input.day().into(),
             )
             .expect("Failed to create NaiveDate from date components");
