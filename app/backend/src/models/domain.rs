@@ -97,7 +97,7 @@ pub fn calculate_rank_change(count: i64, target: i64) -> i32 {
 
 /// Apply rank change to status
 pub fn apply_rank_change(current_status: Status, rank_change: i32) -> Status {
-    let status_order = vec![
+    let status_order = [
         Status::Dirty,
         Status::Unclean,
         Status::Clean,
@@ -109,7 +109,7 @@ pub fn apply_rank_change(current_status: Status, rank_change: i32) -> Status {
         .iter()
         .position(|s| *s == current_status)
         .unwrap_or(2); // Default to Clean
-    let new_index = (current_index as i32 + rank_change).max(0).min(4) as usize;
+    let new_index = (current_index as i32 + rank_change).clamp(0, 4) as usize;
 
     status_order[new_index].clone()
 }

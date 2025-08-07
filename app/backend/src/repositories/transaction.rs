@@ -54,7 +54,7 @@ impl TransactionManager for TransactionManagerImpl {
         R: Send,
     {
         let txn = self.begin().await?;
-        
+
         match f(&txn).await {
             Ok(result) => {
                 txn.commit()

@@ -38,8 +38,8 @@ pub enum ConfigError {
 impl std::fmt::Display for ConfigError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            ConfigError::MissingEnvVar(var) => write!(f, "Missing environment variable: {}", var),
-            ConfigError::InvalidValue(msg) => write!(f, "Invalid configuration value: {}", msg),
+            ConfigError::MissingEnvVar(var) => write!(f, "Missing environment variable: {var}"),
+            ConfigError::InvalidValue(msg) => write!(f, "Invalid configuration value: {msg}"),
         }
     }
 }
@@ -61,7 +61,7 @@ impl AppConfig {
     fn load_target_value() -> Result<i64, ConfigError> {
         match env::var("TARGET_VALUE") {
             Ok(val) => val.parse::<i64>().map_err(|_| {
-                ConfigError::InvalidValue(format!("TARGET_VALUE must be a valid integer: {}", val))
+                ConfigError::InvalidValue(format!("TARGET_VALUE must be a valid integer: {val}"))
             }),
             Err(_) => Ok(100000), // Default value
         }
@@ -132,8 +132,7 @@ impl CorsConfig {
         for origin in &allowed_origins {
             if !origin.starts_with("http://") && !origin.starts_with("https://") {
                 return Err(ConfigError::InvalidValue(format!(
-                    "Invalid origin format: {}. Origins must start with http:// or https://",
-                    origin
+                    "Invalid origin format: {origin}. Origins must start with http:// or https://"
                 )));
             }
         }

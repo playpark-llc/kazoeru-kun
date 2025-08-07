@@ -6,9 +6,7 @@ use sea_orm::{
 };
 use std::sync::Arc;
 
-use crate::sea_generated::{
-    prelude::StatusHistory, sea_orm_active_enums::Status, status_history,
-};
+use crate::sea_generated::{prelude::StatusHistory, sea_orm_active_enums::Status, status_history};
 
 use super::{RepositoryError, Result};
 
@@ -41,11 +39,7 @@ pub trait StatusHistoryRepository: Send + Sync {
         end_date: DateTime<Local>,
     ) -> Result<Vec<StatusHistoryData>>;
     async fn get_latest(&self) -> Result<Option<StatusHistoryData>>;
-    async fn list(
-        &self,
-        limit: u64,
-        offset: u64,
-    ) -> Result<(Vec<StatusHistoryData>, u64)>;
+    async fn list(&self, limit: u64, offset: u64) -> Result<(Vec<StatusHistoryData>, u64)>;
     async fn list_by_date_range(
         &self,
         start_date: DateTime<Local>,
@@ -90,9 +84,7 @@ impl StatusHistoryRepository for DbStatusHistoryRepository {
             ..Default::default()
         };
 
-        let result = StatusHistory::insert(active_model)
-            .exec(&*self.db)
-            .await?;
+        let result = StatusHistory::insert(active_model).exec(&*self.db).await?;
 
         let entity = StatusHistory::find_by_id(result.last_insert_id)
             .one(&*self.db)
@@ -132,11 +124,7 @@ impl StatusHistoryRepository for DbStatusHistoryRepository {
         Ok(entity.map(Self::entity_to_data))
     }
 
-    async fn list(
-        &self,
-        limit: u64,
-        offset: u64,
-    ) -> Result<(Vec<StatusHistoryData>, u64)> {
+    async fn list(&self, limit: u64, offset: u64) -> Result<(Vec<StatusHistoryData>, u64)> {
         let paginator = StatusHistory::find()
             .order_by_desc(status_history::Column::CreatedAt)
             .paginate(&*self.db, limit);
@@ -144,14 +132,11 @@ impl StatusHistoryRepository for DbStatusHistoryRepository {
         let total = paginator.num_items().await?;
         let entities = paginator.fetch_page(offset / limit).await?;
 
-        let data: Vec<StatusHistoryData> = entities
-            .into_iter()
-            .map(Self::entity_to_data)
-            .collect();
+        let data: Vec<StatusHistoryData> = entities.into_iter().map(Self::entity_to_data).collect();
 
         Ok((data, total))
     }
-    
+
     async fn list_by_date_range(
         &self,
         start_date: DateTime<Local>,
@@ -168,10 +153,7 @@ impl StatusHistoryRepository for DbStatusHistoryRepository {
         let total = paginator.num_items().await?;
         let entities = paginator.fetch_page(offset / limit).await?;
 
-        let data: Vec<StatusHistoryData> = entities
-            .into_iter()
-            .map(Self::entity_to_data)
-            .collect();
+        let data: Vec<StatusHistoryData> = entities.into_iter().map(Self::entity_to_data).collect();
 
         Ok((data, total))
     }
@@ -185,9 +167,7 @@ impl StatusHistoryRepository for DbStatusHistoryRepository {
         let mut active_model: status_history::ActiveModel = entity.into();
         active_model.status = Set(status);
 
-        StatusHistory::update(active_model)
-            .exec(&*self.db)
-            .await?;
+        StatusHistory::update(active_model).exec(&*self.db).await?;
 
         Ok(())
     }

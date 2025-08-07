@@ -1,8 +1,8 @@
-use std::sync::Arc;
+use crate::repositories::{RepositoryError, SessionRepository};
 use chrono::Local;
 use serde::{Deserialize, Serialize};
+use std::sync::Arc;
 use uuid::Uuid;
-use crate::repositories::{SessionRepository, RepositoryError};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SessionResponse {
@@ -22,7 +22,10 @@ impl SessionService {
     }
 
     /// セッションをインクリメントし、必要に応じて新規作成・有効期限設定を行う
-    pub async fn increment_session(&self, session_id: Option<&str>) -> Result<SessionResponse, RepositoryError> {
+    pub async fn increment_session(
+        &self,
+        session_id: Option<&str>,
+    ) -> Result<SessionResponse, RepositoryError> {
         let session_id = match session_id {
             Some(id) if !id.is_empty() => {
                 // 既存セッションIDがある場合、有効性をチェック
@@ -42,7 +45,7 @@ impl SessionService {
 
         // カウントをインクリメント
         let count = self.session_repo.increment(&session_id).await?;
-        
+
         // 新規セッション（カウント1）の場合は有効期限を設定
         let (message, is_new) = if count == 1 {
             let expiration = self.calculate_expiration();
@@ -77,7 +80,7 @@ impl SessionService {
     /// セッションの有効期限を計算（翌日の0:00:00）
     fn calculate_expiration(&self) -> chrono::DateTime<Local> {
         use chrono::TimeZone;
-        
+
         Local::now()
             .date_naive()
             .succ_opt()
@@ -131,7 +134,11 @@ mod tests {
             Ok(*count)
         }
 
-        async fn set_expiration(&self, session_id: &str, expiration: i64) -> Result<(), RepositoryError> {
+        async fn set_expiration(
+            &self,
+            session_id: &str,
+            expiration: i64,
+        ) -> Result<(), RepositoryError> {
             let mut expirations = self.expirations.lock().unwrap();
             expirations.insert(session_id.to_string(), expiration);
             Ok(())
@@ -142,10 +149,12 @@ mod tests {
             Ok(sessions.get(session_id).copied().unwrap_or(0) as i32)
         }
 
-        async fn get_all_sessions(&self) -> Result<Vec<crate::repositories::session::SessionData>, RepositoryError> {
+        async fn get_all_sessions(
+            &self,
+        ) -> Result<Vec<crate::repositories::session::SessionData>, RepositoryError> {
             let sessions = self.sessions.lock().unwrap();
             let expirations = self.expirations.lock().unwrap();
-            
+
             Ok(sessions
                 .iter()
                 .map(|(id, count)| crate::repositories::session::SessionData {
@@ -176,7 +185,7 @@ mod tests {
         let service = SessionService::new(repo.clone());
 
         let response = service.increment_session(None).await.unwrap();
-        
+
         assert_eq!(response.count, 1);
         assert!(response.is_new);
         assert!(!response.session_id.is_empty());
@@ -191,10 +200,10 @@ mod tests {
         // 最初のインクリメント（新規作成）
         let response1 = service.increment_session(None).await.unwrap();
         let session_id = response1.session_id.clone();
-        
+
         // 2回目のインクリメント（既存セッション）
         let response2 = service.increment_session(Some(&session_id)).await.unwrap();
-        
+
         assert_eq!(response2.session_id, session_id);
         assert_eq!(response2.count, 2);
         assert!(!response2.is_new);
@@ -207,8 +216,11 @@ mod tests {
         let service = SessionService::new(repo.clone());
 
         // 存在しないセッションIDを指定
-        let response = service.increment_session(Some("nonexistent")).await.unwrap();
-        
+        let response = service
+            .increment_session(Some("nonexistent"))
+            .await
+            .unwrap();
+
         assert_ne!(response.session_id, "nonexistent");
         assert_eq!(response.count, 1);
         assert!(response.is_new);
@@ -221,11 +233,11 @@ mod tests {
 
         let response = service.increment_session(None).await.unwrap();
         let session_id = response.session_id.clone();
-        
+
         // カウントを複数回インクリメント
         service.increment_session(Some(&session_id)).await.unwrap();
         service.increment_session(Some(&session_id)).await.unwrap();
-        
+
         let count = service.get_session_count(&session_id).await.unwrap();
         assert_eq!(count, 3);
     }
@@ -237,10 +249,10 @@ mod tests {
 
         let response = service.increment_session(None).await.unwrap();
         let session_id = response.session_id.clone();
-        
+
         // セッションを削除
         service.delete_session(&session_id).await.unwrap();
-        
+
         // 削除後のカウントは0になる
         let count = service.get_session_count(&session_id).await.unwrap();
         assert_eq!(count, 0);

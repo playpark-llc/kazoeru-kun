@@ -1,5 +1,5 @@
-use opt::di::DiContainer;
 use opt::config::AppConfig;
+use opt::di::DiContainer;
 use opt::routes::configure_routes;
 
 #[macro_use]
@@ -12,8 +12,7 @@ async fn rocket() -> _ {
     log::info!("Starting Kazoeru-kun application...");
 
     // Load configuration
-    let app_config = AppConfig::from_env()
-        .expect("Failed to load configuration");
+    let app_config = AppConfig::from_env().expect("Failed to load configuration");
 
     // Build dependency injection container
     let container = DiContainer::build(app_config)
@@ -21,8 +20,7 @@ async fn rocket() -> _ {
         .expect("Failed to build dependency injection container");
 
     // Get CORS configuration
-    let cors = container.get_cors()
-        .expect("Failed to configure CORS");
+    let cors = container.get_cors().expect("Failed to configure CORS");
 
     // Build and configure Rocket application
     rocket::build()

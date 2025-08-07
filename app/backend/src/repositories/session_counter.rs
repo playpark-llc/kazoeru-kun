@@ -1,8 +1,8 @@
 use async_trait::async_trait;
 use chrono::{DateTime, Local, TimeZone};
 use sea_orm::{
-    sea_query::OnConflict, ColumnTrait, DatabaseConnection, DatabaseTransaction, EntityTrait, PaginatorTrait,
-    QueryFilter, QueryOrder, QuerySelect, Set,
+    sea_query::OnConflict, ColumnTrait, DatabaseConnection, DatabaseTransaction, EntityTrait,
+    PaginatorTrait, QueryFilter, QueryOrder, QuerySelect, Set,
 };
 use std::sync::Arc;
 
@@ -194,10 +194,8 @@ impl SessionCounterRepository for DbSessionCounterRepository {
         let total = paginator.num_items().await?;
         let entities = paginator.fetch_page(offset / limit).await?;
 
-        let data: Vec<SessionCounterData> = entities
-            .into_iter()
-            .map(Self::entity_to_data)
-            .collect();
+        let data: Vec<SessionCounterData> =
+            entities.into_iter().map(Self::entity_to_data).collect();
 
         Ok((data, total))
     }

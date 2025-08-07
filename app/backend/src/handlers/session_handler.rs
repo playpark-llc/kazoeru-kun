@@ -1,9 +1,9 @@
-use rocket::{get, post, put, http::CookieJar, serde::json::Json, State};
-use std::sync::Arc;
 use crate::models::response::{ErrorResponse, Response, SessionCount, SessionCounterSummary};
 use crate::repositories::SessionCounterRepository;
 use crate::services::{SessionService, SyncService};
-use crate::{DateRange, get_date_range_local};
+use crate::{get_date_range_local, DateRange};
+use rocket::{get, http::CookieJar, post, put, serde::json::Json, State};
+use std::sync::Arc;
 
 /// POST /session - セッションのクリックカウンタをインクリメント
 #[post("/session")]
@@ -13,9 +13,9 @@ pub async fn create_session(
 ) -> Result<Json<Response<SessionCount>>, Json<ErrorResponse>> {
     // リクエスト処理とレスポンス返却のみ
     // ビジネスロジックはサービス層に委譲
-    
+
     let session_id = cookies.get("session").map(|cookie| cookie.value());
-    
+
     match session_service.increment_session(session_id).await {
         Ok(session_response) => {
             // 新規セッションの場合はクッキーを設定
@@ -24,14 +24,16 @@ pub async fn create_session(
                 let expiration = create_expiration();
                 create_session_cookie_with_expiration(cookies, expiration);
             }
-            
+
             Ok(Json(Response {
                 message: session_response.message,
-                result: SessionCount { count: session_response.count },
+                result: SessionCount {
+                    count: session_response.count,
+                },
             }))
         }
         Err(e) => Err(Json(ErrorResponse {
-            error: format!("Failed to increment session: {:?}", e),
+            error: format!("Failed to increment session: {e:?}"),
         })),
     }
 }
@@ -42,20 +44,18 @@ pub async fn sync_sessions(
     sync_service: &State<Arc<SyncService>>,
 ) -> Result<Json<Response<String>>, Json<ErrorResponse>> {
     // ビジネスロジックはサービス層に委譲
-    
+
     match sync_service.sync_sessions_to_database().await {
-        Ok(sync_result) => {
-            Ok(Json(Response {
-                message: sync_result.message,
-                result: if sync_result.success { 
-                    "Success".to_string() 
-                } else { 
-                    "Failed".to_string() 
-                },
-            }))
-        }
+        Ok(sync_result) => Ok(Json(Response {
+            message: sync_result.message,
+            result: if sync_result.success {
+                "Success".to_string()
+            } else {
+                "Failed".to_string()
+            },
+        })),
         Err(e) => Err(Json(ErrorResponse {
-            error: format!("Failed to sync sessions: {:?}", e),
+            error: format!("Failed to sync sessions: {e:?}"),
         })),
     }
 }
@@ -84,22 +84,22 @@ async fn get_session_counter_impl(
     date_range: Option<DateRange>,
 ) -> Result<Json<Response<SessionCounterSummary>>, Json<ErrorResponse>> {
     let date_range = get_date_range_local(date_range);
-    
+
     // 指定期間の合計を取得
     let sum_count = counter_repo
         .sum_count_between(date_range.start_date, date_range.end_date)
         .await
         .map_err(|e| {
             Json(ErrorResponse {
-                error: format!("Failed to get count summary: {:?}", e),
+                error: format!("Failed to get count summary: {e:?}"),
             })
         })?;
-    
+
     use sea_orm::prelude::Decimal;
     let res = Response {
         message: "指定期間のクリック数を取得しました".to_string(),
-        result: SessionCounterSummary { 
-            sum_count: Decimal::from(sum_count) 
+        result: SessionCounterSummary {
+            sum_count: Decimal::from(sum_count),
         },
     };
     Ok(Json(res))
@@ -131,7 +131,7 @@ mod tests {
         // Test optional DateRange handling
         let date_range: Option<DateRange> = None;
         let processed_range = get_date_range_local(date_range);
-        
+
         // Should return a valid date range structure
         assert!(processed_range.start_date <= processed_range.end_date);
     }
@@ -152,7 +152,7 @@ mod tests {
             message: "Test message".to_string(),
             result: SessionCount { count: 5 },
         };
-        
+
         assert_eq!(response.message, "Test message");
         assert_eq!(response.result.count, 5);
     }

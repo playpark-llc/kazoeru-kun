@@ -4,7 +4,9 @@ pub mod status_history;
 pub mod transaction;
 
 pub use session::{RedisSessionRepository, SessionRepository};
-pub use session_counter::{CreateSessionCounter, DbSessionCounterRepository, SessionCounterRepository};
+pub use session_counter::{
+    CreateSessionCounter, DbSessionCounterRepository, SessionCounterRepository,
+};
 pub use status_history::{CreateStatusHistory, DbStatusHistoryRepository, StatusHistoryRepository};
 pub use transaction::{TransactionManager, TransactionManagerImpl};
 
@@ -23,11 +25,11 @@ pub enum RepositoryError {
 impl fmt::Display for RepositoryError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            RepositoryError::DatabaseError(msg) => write!(f, "Database error: {}", msg),
-            RepositoryError::RedisError(msg) => write!(f, "Redis error: {}", msg),
+            RepositoryError::DatabaseError(msg) => write!(f, "Database error: {msg}"),
+            RepositoryError::RedisError(msg) => write!(f, "Redis error: {msg}"),
             RepositoryError::NotFound => write!(f, "Resource not found"),
-            RepositoryError::ConfigError(err) => write!(f, "Configuration error: {}", err),
-            RepositoryError::TransactionError(msg) => write!(f, "Transaction error: {}", msg),
+            RepositoryError::ConfigError(err) => write!(f, "Configuration error: {err}"),
+            RepositoryError::TransactionError(msg) => write!(f, "Transaction error: {msg}"),
         }
     }
 }

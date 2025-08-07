@@ -1,12 +1,11 @@
-use std::sync::Arc;
 use chrono::{DateTime, Local, TimeZone};
 use sea_orm::prelude::Decimal;
 use serde::{Deserialize, Serialize};
+use std::sync::Arc;
 
-use crate::models::domain::{calculate_rank_change, apply_rank_change, get_last_week_range};
+use crate::models::domain::{apply_rank_change, calculate_rank_change, get_last_week_range};
 use crate::repositories::{
-    SessionCounterRepository, StatusHistoryRepository, 
-    CreateStatusHistory, RepositoryError
+    CreateStatusHistory, RepositoryError, SessionCounterRepository, StatusHistoryRepository,
 };
 use crate::sea_generated::sea_orm_active_enums::Status;
 
@@ -16,8 +15,8 @@ pub struct StatusUpdateResult {
     pub week_end: DateTime<Local>,
     pub weekly_count: i64,
     pub target_value: i64,
-    pub previous_status: String,  // Status型をStringに変更
-    pub new_status: String,       // Status型をStringに変更
+    pub previous_status: String, // Status型をStringに変更
+    pub new_status: String,      // Status型をStringに変更
     pub rank_change: i32,
     pub message: String,
     pub was_duplicate: bool,
@@ -40,90 +39,95 @@ impl StatusService {
     }
 
     /// 週次ステータスを更新
-    pub async fn update_weekly_status(&self, target_value: i64) -> Result<StatusUpdateResult, RepositoryError> {
+    pub async fn update_weekly_status(
+        &self,
+        target_value: i64,
+    ) -> Result<StatusUpdateResult, RepositoryError> {
         // 先週の期間を取得
         let (week_start, week_end) = get_last_week_range();
-        
+
         // ローカルタイムゾーンに変換
         let start_date_local = Local.from_utc_datetime(&week_start.naive_utc());
         let end_date_local = Local.from_utc_datetime(&week_end.naive_utc());
-        
+
         // 先週のカウント合計を計算
-        let weekly_count = self.counter_repo
+        let weekly_count = self
+            .counter_repo
             .sum_count_between(start_date_local, end_date_local)
             .await?;
-        
+
         log::debug!("Weekly count: {}, Target: {}", weekly_count, target_value);
-        
+
         // 現在のステータスを取得（最新のエントリ）
-        let current_status_result = self.status_history_repo
-            .get_latest()
-            .await?;
-        
+        let current_status_result = self.status_history_repo.get_latest().await?;
+
         let current_status = current_status_result
             .map(|r| r.status)
             .unwrap_or(Status::Clean); // 前回のステータスがない場合はCleanから開始
-        
+
         // ランクの変化を計算
         let rank_change = calculate_rank_change(weekly_count, target_value);
-        
+
         // 新しいステータスを適用
         let new_status = apply_rank_change(current_status.clone(), rank_change);
-        
+
         log::debug!(
             "Current status: {:?}, Rank change: {}, New status: {:?}",
             current_status,
             rank_change,
             new_status
         );
-        
-        // 先週の記録が既に存在するかチェック
-        let existing_records = self.status_history_repo
-            .find_by_date_range(start_date_local, end_date_local)
+
+        // 全ての既存レコードを取得して重複チェック
+        let all_existing_records = self
+            .status_history_repo
+            .list(1000, 0) // 十分な数を取得
             .await?;
-        
-        let existing_record = existing_records.into_iter().find(|r| 
-            r.start_date == start_date_local.naive_local().date() && 
-            r.end_date == end_date_local.naive_local().date()
-        );
-        
-        // 重複チェック
-        if let Some(existing) = existing_record {
-            log::info!(
-                "Status history duplicate attempt - Period: {} to {}, Status: {:?}, Count: {}",
-                start_date_local.naive_local(),
-                end_date_local.naive_local(),
-                existing.status,
-                existing.count
-            );
-            
-            let existing_status = existing.status.clone();
-            return Ok(StatusUpdateResult {
-                week_start: start_date_local,
-                week_end: end_date_local,
-                weekly_count,
-                target_value,
-                previous_status: format!("{:?}", current_status),
-                new_status: format!("{:?}", existing_status),
-                rank_change,
-                message: format!(
-                    "Status history already exists for this period (existing status: {:?}, count: {}, target: {})",
-                    existing_status, weekly_count, target_value
-                ),
-                was_duplicate: true,
-            });
+
+        // 現在の計算対象期間（先週）
+        let target_week_start = start_date_local.naive_local().date();
+        let target_week_end = end_date_local.naive_local().date();
+
+        // 既存レコードの中で、計算対象期間が既にカバーされているかチェック
+        for record in all_existing_records.0 {
+            // 既存レコードの期間内に、現在の計算対象期間（先週）が含まれているかチェック
+            if record.start_date <= target_week_start && target_week_end <= record.end_date {
+                log::info!(
+                    "Status history already covers this period - Existing: {} to {}, Target: {} to {}, Status: {:?}",
+                    record.start_date,
+                    record.end_date,
+                    target_week_start,
+                    target_week_end,
+                    record.status
+                );
+
+                return Ok(StatusUpdateResult {
+                    week_start: start_date_local,
+                    week_end: end_date_local,
+                    weekly_count,
+                    target_value,
+                    previous_status: format!("{current_status:?}"),
+                    new_status: format!("{:?}", record.status),
+                    rank_change,
+                    message: format!(
+                        "Status history already exists for period {} to {} (covered by {} to {})",
+                        target_week_start, target_week_end, record.start_date, record.end_date
+                    ),
+                    was_duplicate: true,
+                });
+            }
         }
-        
+
         // 新しいステータス履歴レコードを挿入
         let new_record = CreateStatusHistory {
-            start_date: start_date_local.naive_local().date(),
-            end_date: end_date_local.naive_local().date(),
+            start_date: target_week_start,
+            end_date: target_week_end,
             count: Decimal::from(weekly_count),
             status: new_status.clone(),
         };
-        
+
         self.status_history_repo.create(new_record).await?;
-        
+
         let message = format!(
             "Status updated from {:?} to {:?} (count: {}, target: {}, change: {})",
             current_status,
@@ -131,19 +135,19 @@ impl StatusService {
             weekly_count,
             target_value,
             if rank_change > 0 {
-                format!("+{}", rank_change)
+                format!("+{rank_change}")
             } else {
                 rank_change.to_string()
             }
         );
-        
+
         Ok(StatusUpdateResult {
             week_start: start_date_local,
             week_end: end_date_local,
             weekly_count,
             target_value,
-            previous_status: format!("{:?}", current_status),
-            new_status: format!("{:?}", new_status),
+            previous_status: format!("{current_status:?}"),
+            new_status: format!("{new_status:?}"),
             rank_change,
             message,
             was_duplicate: false,
@@ -163,7 +167,13 @@ impl StatusService {
         end_date: DateTime<Local>,
         limit: u64,
         offset: u64,
-    ) -> Result<(Vec<crate::repositories::status_history::StatusHistoryData>, u64), RepositoryError> {
+    ) -> Result<
+        (
+            Vec<crate::repositories::status_history::StatusHistoryData>,
+            u64,
+        ),
+        RepositoryError,
+    > {
         self.status_history_repo
             .list_by_date_range(start_date, end_date, limit, offset)
             .await
@@ -194,13 +204,17 @@ mod tests {
 
     #[async_trait]
     impl StatusHistoryRepository for MockStatusHistoryRepository {
-        async fn create(&self, data: CreateStatusHistory) -> Result<crate::repositories::status_history::StatusHistoryData, RepositoryError> {
+        async fn create(
+            &self,
+            data: CreateStatusHistory,
+        ) -> Result<crate::repositories::status_history::StatusHistoryData, RepositoryError>
+        {
             let mut records = self.records.lock().unwrap();
             let mut next_id = self.next_id.lock().unwrap();
-            
+
             let id = *next_id;
             *next_id += 1;
-            
+
             let record = crate::repositories::status_history::StatusHistoryData {
                 id,
                 start_date: data.start_date,
@@ -210,42 +224,79 @@ mod tests {
                 created_at: Local::now(),
                 updated_at: Local::now(),
             };
-            
+
             records.push(record.clone());
             Ok(record)
         }
 
-        async fn find_by_id(&self, _id: i32) -> Result<Option<crate::repositories::status_history::StatusHistoryData>, RepositoryError> {
+        async fn find_by_id(
+            &self,
+            _id: i32,
+        ) -> Result<Option<crate::repositories::status_history::StatusHistoryData>, RepositoryError>
+        {
             unimplemented!()
         }
 
-        async fn find_by_date_range(&self, start: DateTime<Local>, end: DateTime<Local>) -> Result<Vec<crate::repositories::status_history::StatusHistoryData>, RepositoryError> {
+        async fn find_by_date_range(
+            &self,
+            start: DateTime<Local>,
+            end: DateTime<Local>,
+        ) -> Result<Vec<crate::repositories::status_history::StatusHistoryData>, RepositoryError>
+        {
             let records = self.records.lock().unwrap();
             Ok(records
                 .iter()
                 .filter(|r| {
                     // 日付の比較を簡略化
-                    r.start_date == start.naive_local().date() && 
-                    r.end_date == end.naive_local().date()
+                    r.start_date == start.naive_local().date()
+                        && r.end_date == end.naive_local().date()
                 })
                 .cloned()
                 .collect())
         }
 
-        async fn list(&self, _limit: u64, _offset: u64) -> Result<(Vec<crate::repositories::status_history::StatusHistoryData>, u64), RepositoryError> {
+        async fn list(
+            &self,
+            _limit: u64,
+            _offset: u64,
+        ) -> Result<
+            (
+                Vec<crate::repositories::status_history::StatusHistoryData>,
+                u64,
+            ),
+            RepositoryError,
+        > {
             let records = self.records.lock().unwrap();
             Ok((records.clone(), records.len() as u64))
         }
 
-        async fn list_by_date_range(&self, _start: DateTime<Local>, _end: DateTime<Local>, limit: u64, offset: u64) -> Result<(Vec<crate::repositories::status_history::StatusHistoryData>, u64), RepositoryError> {
+        async fn list_by_date_range(
+            &self,
+            _start: DateTime<Local>,
+            _end: DateTime<Local>,
+            limit: u64,
+            offset: u64,
+        ) -> Result<
+            (
+                Vec<crate::repositories::status_history::StatusHistoryData>,
+                u64,
+            ),
+            RepositoryError,
+        > {
             let records = self.records.lock().unwrap();
             let total = records.len() as u64;
             let start = offset as usize;
             let end = (offset + limit) as usize;
-            Ok((records[start.min(records.len())..end.min(records.len())].to_vec(), total))
+            Ok((
+                records[start.min(records.len())..end.min(records.len())].to_vec(),
+                total,
+            ))
         }
 
-        async fn get_latest(&self) -> Result<Option<crate::repositories::status_history::StatusHistoryData>, RepositoryError> {
+        async fn get_latest(
+            &self,
+        ) -> Result<Option<crate::repositories::status_history::StatusHistoryData>, RepositoryError>
+        {
             let records = self.records.lock().unwrap();
             Ok(records.last().cloned())
         }
@@ -273,35 +324,66 @@ mod tests {
 
     #[async_trait]
     impl SessionCounterRepository for MockSessionCounterRepository {
-        async fn upsert(&self, _data: crate::repositories::CreateSessionCounter) -> Result<(), RepositoryError> {
+        async fn upsert(
+            &self,
+            _data: crate::repositories::CreateSessionCounter,
+        ) -> Result<(), RepositoryError> {
             unimplemented!()
         }
 
-        async fn upsert_many(&self, _data: Vec<crate::repositories::CreateSessionCounter>) -> Result<(), RepositoryError> {
+        async fn upsert_many(
+            &self,
+            _data: Vec<crate::repositories::CreateSessionCounter>,
+        ) -> Result<(), RepositoryError> {
             unimplemented!()
         }
 
-        async fn upsert_many_with_txn(&self, _data: Vec<crate::repositories::CreateSessionCounter>, _txn: &sea_orm::DatabaseTransaction) -> Result<(), RepositoryError> {
+        async fn upsert_many_with_txn(
+            &self,
+            _data: Vec<crate::repositories::CreateSessionCounter>,
+            _txn: &sea_orm::DatabaseTransaction,
+        ) -> Result<(), RepositoryError> {
             unimplemented!()
         }
 
-        async fn sum_count_between(&self, _start_date: DateTime<Local>, _end_date: DateTime<Local>) -> Result<i64, RepositoryError> {
+        async fn sum_count_between(
+            &self,
+            _start_date: DateTime<Local>,
+            _end_date: DateTime<Local>,
+        ) -> Result<i64, RepositoryError> {
             // テスト用に固定値を返す
             Ok(1000)
         }
 
-        async fn find_by_session_id(&self, _session_id: &str) -> Result<Option<crate::repositories::session_counter::SessionCounterData>, RepositoryError> {
+        async fn find_by_session_id(
+            &self,
+            _session_id: &str,
+        ) -> Result<Option<crate::repositories::session_counter::SessionCounterData>, RepositoryError>
+        {
             unimplemented!()
         }
 
-        async fn find_by_id(&self, _id: i32) -> Result<Option<crate::repositories::session_counter::SessionCounterData>, RepositoryError> {
+        async fn find_by_id(
+            &self,
+            _id: i32,
+        ) -> Result<Option<crate::repositories::session_counter::SessionCounterData>, RepositoryError>
+        {
             unimplemented!()
         }
 
-        async fn list(&self, _limit: u64, _offset: u64) -> Result<(Vec<crate::repositories::session_counter::SessionCounterData>, u64), RepositoryError> {
+        async fn list(
+            &self,
+            _limit: u64,
+            _offset: u64,
+        ) -> Result<
+            (
+                Vec<crate::repositories::session_counter::SessionCounterData>,
+                u64,
+            ),
+            RepositoryError,
+        > {
             unimplemented!()
         }
-
 
         async fn delete(&self, _id: i32) -> Result<(), RepositoryError> {
             unimplemented!()
@@ -319,7 +401,7 @@ mod tests {
         let service = StatusService::new(status_repo.clone(), counter_repo);
 
         let result = service.update_weekly_status(1500).await.unwrap();
-        
+
         assert_eq!(result.weekly_count, 1000);
         assert_eq!(result.target_value, 1500);
         assert_eq!(result.previous_status, "Clean"); // 初回はCleanから開始
@@ -328,16 +410,163 @@ mod tests {
 
     #[tokio::test]
     async fn test_duplicate_status_update() {
-        let status_repo = Arc::new(MockStatusHistoryRepository::new());
+        // カスタムMockRepositoryを作成して、期間の重複をテスト
+        struct MockStatusHistoryRepositoryWithData {
+            records: Arc<Mutex<Vec<crate::repositories::status_history::StatusHistoryData>>>,
+            next_id: Arc<Mutex<i32>>,
+        }
+
+        impl MockStatusHistoryRepositoryWithData {
+            fn new() -> Self {
+                Self {
+                    records: Arc::new(Mutex::new(Vec::new())),
+                    next_id: Arc::new(Mutex::new(1)),
+                }
+            }
+
+            fn add_existing_record(
+                &self,
+                start_date: chrono::NaiveDate,
+                end_date: chrono::NaiveDate,
+            ) {
+                let mut records = self.records.lock().unwrap();
+                records.push(crate::repositories::status_history::StatusHistoryData {
+                    id: 1,
+                    start_date,
+                    end_date,
+                    count: Decimal::from(1000),
+                    status: Status::Clean,
+                    created_at: Local::now(),
+                    updated_at: Local::now(),
+                });
+            }
+        }
+
+        #[async_trait]
+        impl StatusHistoryRepository for MockStatusHistoryRepositoryWithData {
+            async fn create(
+                &self,
+                data: CreateStatusHistory,
+            ) -> Result<crate::repositories::status_history::StatusHistoryData, RepositoryError>
+            {
+                let mut records = self.records.lock().unwrap();
+                let mut next_id = self.next_id.lock().unwrap();
+
+                let id = *next_id;
+                *next_id += 1;
+
+                let record = crate::repositories::status_history::StatusHistoryData {
+                    id,
+                    start_date: data.start_date,
+                    end_date: data.end_date,
+                    count: data.count,
+                    status: data.status,
+                    created_at: Local::now(),
+                    updated_at: Local::now(),
+                };
+
+                records.push(record.clone());
+                Ok(record)
+            }
+
+            async fn find_by_id(
+                &self,
+                _id: i32,
+            ) -> Result<
+                Option<crate::repositories::status_history::StatusHistoryData>,
+                RepositoryError,
+            > {
+                unimplemented!()
+            }
+
+            async fn find_by_date_range(
+                &self,
+                _start: DateTime<Local>,
+                _end: DateTime<Local>,
+            ) -> Result<Vec<crate::repositories::status_history::StatusHistoryData>, RepositoryError>
+            {
+                Ok(Vec::new())
+            }
+
+            async fn list(
+                &self,
+                _limit: u64,
+                _offset: u64,
+            ) -> Result<
+                (
+                    Vec<crate::repositories::status_history::StatusHistoryData>,
+                    u64,
+                ),
+                RepositoryError,
+            > {
+                let records = self.records.lock().unwrap();
+                Ok((records.clone(), records.len() as u64))
+            }
+
+            async fn list_by_date_range(
+                &self,
+                _start: DateTime<Local>,
+                _end: DateTime<Local>,
+                _limit: u64,
+                _offset: u64,
+            ) -> Result<
+                (
+                    Vec<crate::repositories::status_history::StatusHistoryData>,
+                    u64,
+                ),
+                RepositoryError,
+            > {
+                unimplemented!()
+            }
+
+            async fn get_latest(
+                &self,
+            ) -> Result<
+                Option<crate::repositories::status_history::StatusHistoryData>,
+                RepositoryError,
+            > {
+                let records = self.records.lock().unwrap();
+                Ok(records.last().cloned())
+            }
+
+            async fn update_status(
+                &self,
+                _id: i32,
+                _status: Status,
+            ) -> Result<(), RepositoryError> {
+                unimplemented!()
+            }
+
+            async fn delete(&self, _id: i32) -> Result<(), RepositoryError> {
+                unimplemented!()
+            }
+        }
+
+        let status_repo = Arc::new(MockStatusHistoryRepositoryWithData::new());
         let counter_repo = Arc::new(MockSessionCounterRepository::new());
+
+        // 既存のレコードを追加（先週の期間を含む大きな期間）
+        let (week_start, week_end) = get_last_week_range();
+        let start_date = Local
+            .from_utc_datetime(&week_start.naive_utc())
+            .naive_local()
+            .date();
+        let end_date = Local
+            .from_utc_datetime(&week_end.naive_utc())
+            .naive_local()
+            .date();
+
+        // より大きな期間のレコードを作成（先週を含む）
+        status_repo.add_existing_record(
+            start_date - chrono::Duration::days(7),
+            end_date + chrono::Duration::days(7),
+        );
+
         let service = StatusService::new(status_repo.clone(), counter_repo);
 
-        // 最初の更新
-        let result1 = service.update_weekly_status(1500).await.unwrap();
-        assert!(!result1.was_duplicate);
-        
-        // 重複更新（同じ週）
-        let result2 = service.update_weekly_status(1500).await.unwrap();
-        assert!(result2.was_duplicate);
+        // 重複チェックのテスト
+        let result = service.update_weekly_status(1500).await.unwrap();
+        assert!(result.was_duplicate);
+        assert!(result.message.contains("already exists"));
     }
 }
