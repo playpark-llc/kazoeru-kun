@@ -176,7 +176,6 @@ mod tests {
     use async_trait::async_trait;
     use std::collections::HashMap;
     use std::sync::Mutex;
-    use chrono::NaiveDate;
 
     // テスト用のモックリポジトリ
     struct MockStatusHistoryRepository {
@@ -303,9 +302,6 @@ mod tests {
             unimplemented!()
         }
 
-        async fn list_by_date_range(&self, _start_date: DateTime<Local>, _end_date: DateTime<Local>, _limit: u64, _offset: u64) -> Result<(Vec<crate::repositories::session_counter::SessionCounterData>, u64), RepositoryError> {
-            unimplemented!()
-        }
 
         async fn delete(&self, _id: i32) -> Result<(), RepositoryError> {
             unimplemented!()

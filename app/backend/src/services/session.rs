@@ -76,19 +76,16 @@ impl SessionService {
 
     /// セッションの有効期限を計算（翌日の0:00:00）
     fn calculate_expiration(&self) -> chrono::DateTime<Local> {
-        let now = Local::now();
+        use chrono::TimeZone;
+        
         Local::now()
             .date_naive()
             .succ_opt()
             .and_then(|tomorrow| tomorrow.and_hms_opt(0, 0, 0))
-            .map(|datetime| Local::now().date_naive().and_hms_opt(0, 0, 0).unwrap())
-            .and_then(|datetime| {
-                use chrono::TimeZone;
-                Local.from_local_datetime(&datetime).single()
-            })
+            .and_then(|dt| Local.from_local_datetime(&dt).single())
             .unwrap_or_else(|| {
                 // フォールバック: 現在時刻から24時間後
-                now + chrono::Duration::hours(24)
+                Local::now() + chrono::Duration::hours(24)
             })
     }
 
