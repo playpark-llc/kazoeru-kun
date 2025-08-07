@@ -3,6 +3,8 @@ name = "opt"
 version = "0.1.0"
 edition = "2021"
 
+[features]
+integration_tests = []
 
 [dependencies]
 serde = "1.0.200"

@@ -202,7 +202,8 @@ impl StatusHistoryRepository for DbStatusHistoryRepository {
 #[cfg(feature = "integration_tests")]
 mod tests {
     use super::*;
-    use sea_orm::Database;
+    use sea_orm::{Database, prelude::Decimal};
+    use chrono::{Local, TimeZone};
 
     async fn create_test_db() -> DatabaseConnection {
         Database::connect("mysql://user:password@localhost/test_db")
@@ -218,7 +219,7 @@ mod tests {
         let data = CreateStatusHistory {
             start_date: NaiveDate::from_ymd_opt(2024, 1, 1).unwrap(),
             end_date: NaiveDate::from_ymd_opt(2024, 1, 7).unwrap(),
-            count: 100,
+            count: Decimal::from(100),
             status: Status::Clean,
         };
 
@@ -226,7 +227,7 @@ mod tests {
         assert!(result.is_ok());
 
         let created = result.unwrap();
-        assert_eq!(created.count, 100);
+        assert_eq!(created.count, Decimal::from(100));
         assert_eq!(created.status, Status::Clean);
     }
 
@@ -241,17 +242,20 @@ mod tests {
         let data = CreateStatusHistory {
             start_date,
             end_date,
-            count: 200,
+            count: Decimal::from(200),
             status: Status::Immaculate,
         };
 
         repo.create(data.clone()).await.unwrap();
 
-        let found = repo.find_by_date_range(start_date, end_date).await.unwrap();
-        assert!(found.is_some());
+        let start_datetime = Local.from_local_datetime(&start_date.and_hms_opt(0, 0, 0).unwrap()).unwrap();
+        let end_datetime = Local.from_local_datetime(&end_date.and_hms_opt(23, 59, 59).unwrap()).unwrap();
+        
+        let found = repo.find_by_date_range(start_datetime, end_datetime).await.unwrap();
+        assert!(!found.is_empty());
 
-        let history = found.unwrap();
-        assert_eq!(history.count, 200);
+        let history = &found[0];
+        assert_eq!(history.count, Decimal::from(200));
         assert_eq!(history.status, Status::Immaculate);
     }
 
@@ -263,7 +267,7 @@ mod tests {
         let data1 = CreateStatusHistory {
             start_date: NaiveDate::from_ymd_opt(2024, 1, 15).unwrap(),
             end_date: NaiveDate::from_ymd_opt(2024, 1, 21).unwrap(),
-            count: 300,
+            count: Decimal::from(300),
             status: Status::Spotless,
         };
 

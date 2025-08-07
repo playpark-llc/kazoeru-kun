@@ -76,7 +76,7 @@ impl TransactionManager for TransactionManagerImpl {
 mod tests {
     use super::*;
     use crate::sea_generated::{prelude::SessionCounter, session_counter};
-    use sea_orm::{Database, EntityTrait, Set};
+    use sea_orm::{Database, EntityTrait, Set, QueryFilter, ColumnTrait};
 
     async fn create_test_db() -> DatabaseConnection {
         Database::connect("mysql://user:password@localhost/test_db")
