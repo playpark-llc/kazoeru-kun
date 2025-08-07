@@ -1,14 +1,20 @@
 mod config;
 mod models;
+mod repositories;
 mod sea_generated;
 
 use crate::config::AppConfig;
+use crate::repositories::{
+    RedisSessionRepository, SessionRepository,
+    DbSessionCounterRepository, SessionCounterRepository,
+    DbStatusHistoryRepository, StatusHistoryRepository,
+    CreateSessionCounter, CreateStatusHistory,
+};
 use chrono::{Local, TimeZone};
 use deadpool_redis::{
-    redis::{AsyncCommands, AsyncIter},
     Config, Pool, Runtime,
 };
-use futures::stream::StreamExt;
+use std::sync::Arc;
 use models::{
     domain::{apply_rank_change, calculate_rank_change, get_current_week_range, status_to_string},
     response::{
@@ -36,7 +42,7 @@ extern crate rocket;
 
 #[post("/session")]
 async fn post_session(
-    redis_pool: &State<Pool>,
+    session_repo: &State<Arc<dyn SessionRepository>>,
     cookies: &CookieJar<'_>,
 ) -> Result<Json<Response<SessionCount>>, Json<ErrorResponse>> {
     let session_id: String;
@@ -56,24 +62,21 @@ async fn post_session(
             session_id = create_session_cookie_with_expiration(cookies, expiration);
         }
     }
-    // redisの接続を取得
-    let mut redis_con = get_redis_connection(redis_pool)
-        .await
-        .map_err(|e| Json(ErrorResponse { error: e }))?;
 
     // redisにセッションIDを保存
-    let session_count = redis_con.incr(session_id.clone(), 1).await.map_err(|e| {
-        Json(ErrorResponse {
+    let session_count = session_repo
+        .increment(&session_id)
+        .await
+        .map_err(|e| Json(ErrorResponse {
             error: format!("Failed to incr session_id to redis: {:?}", e),
-        })
-    })?;
+        }))?;
 
     let res = match session_count {
         // session_idのカウントが1の場合は有効期限を設定
         1 => {
             let expiration = create_expiration();
-            redis_con
-                .expire_at::<String, u32>(session_id.clone(), expiration.timestamp())
+            session_repo
+                .set_expiration(&session_id, expiration.timestamp())
                 .await
                 .map_err(|e| {
                     Json(ErrorResponse {
@@ -99,74 +102,40 @@ async fn post_session(
 
 #[put("/session")]
 async fn put_session(
-    redis_pool: &State<Pool>,
-    db: &State<DatabaseConnection>,
+    session_repo: &State<Arc<dyn SessionRepository>>,
+    counter_repo: &State<Arc<dyn SessionCounterRepository>>,
 ) -> Result<Json<Response<String>>, Json<ErrorResponse>> {
-    // redisの接続を取得
-    let mut redis_con = get_redis_connection(redis_pool)
+    // Redisから全セッション情報を取得
+    let sessions = session_repo
+        .get_all_sessions()
         .await
-        .map_err(|e| Json(ErrorResponse { error: e }))?;
+        .map_err(|e| Json(ErrorResponse {
+            error: format!("Failed to get sessions from redis: {:?}", e),
+        }))?;
 
-    // セッションIDのイテレータ取得を保存
-    let mut session_id_iter: AsyncIter<String> = redis_con.scan().await.map_err(|e| {
-        Json(ErrorResponse {
-            error: format!("Failed to keys * redis connection: {:?}", e),
-        })
-    })?;
-
-    let mut insert_records = vec![];
-    while let Some(session_id) = session_id_iter.next().await {
-        let mut redis_con = get_redis_connection(redis_pool)
-            .await
-            .map_err(|e| Json(ErrorResponse { error: e }))?;
-        let insert_record = tokio::spawn(async move {
-            let redis_count: i32 = redis_con.get(&session_id).await.unwrap_or(0);
-            session_counter::ActiveModel {
-                session_id: Set(session_id.clone().to_owned()),
-                count: Set(redis_count.to_owned()),
-                ..Default::default()
-            }
-        })
-        .await
-        .map_err(|e| {
-            Json(ErrorResponse {
-                error: format!("Failed to create insert record: {:?}", e),
-            })
-        })?;
-
-        insert_records.push(insert_record);
-    }
-
-    if insert_records.len() == 0 {
+    if sessions.is_empty() {
         return Ok(Json(Response {
             message: "更新するDBのセッション情報はありませんでした".to_string(),
             result: "Success".to_string(),
         }));
     }
-    let on_conflict = OnConflict::column(session_counter::Column::SessionId)
-        .update_column(session_counter::Column::Count)
-        .to_owned();
 
-    // upsertの結果を取得
-    let insert_result = SessionCounter::insert_many(insert_records)
-        .on_conflict(on_conflict.clone())
-        .exec(db.inner())
-        .await;
+    let insert_records: Vec<CreateSessionCounter> = sessions
+        .into_iter()
+        .map(|session| CreateSessionCounter {
+            session_id: session.session_id,
+            count: session.count,
+        })
+        .collect();
 
-    match insert_result {
-        Ok(_) => {}
-        Err(e) => {
-            if e.eq(&DbErr::RecordNotInserted) {
-                return Ok(Json(Response {
-                    message: "更新するDBのセッション情報はありませんでした".to_string(),
-                    result: "Success".to_string(),
-                }));
-            }
-            return Err(Json(ErrorResponse {
-                error: format!("Failed to upsert session_counter table in db: {:?}", e),
-            }));
-        }
-    }
+    // データベースにupsert
+    counter_repo
+        .upsert_many(insert_records)
+        .await
+        .map_err(|e| Json(ErrorResponse {
+            error: format!("Failed to upsert session_counter table: {:?}", e),
+        }))?;
+
     let res = Response {
         message: "DBのセッション情報を更新しました".to_string(),
         result: "Success".to_string(),
@@ -417,52 +386,47 @@ async fn get_status_history(
 // Note: Despite the name, this endpoint queries from session_counter table, not status_history (formerly count_summary)
 #[get("/count_summary?<date_range..>")]
 async fn get_count_summary(
-    redis_pool: &State<Pool>,
-    db: &State<DatabaseConnection>,
+    session_repo: &State<Arc<dyn SessionRepository>>,
+    counter_repo: &State<Arc<dyn SessionCounterRepository>>,
     date_range: Option<DateRange>,
 ) -> Result<Json<Response<SessionCounterSummary>>, Json<ErrorResponse>> {
-    get_session_counter_impl(redis_pool, db, date_range).await
+    get_session_counter_impl(session_repo, counter_repo, date_range).await
 }
 
 #[get("/session_counter?<date_range..>")]
 async fn get_session_counter(
-    redis_pool: &State<Pool>,
-    db: &State<DatabaseConnection>,
+    session_repo: &State<Arc<dyn SessionRepository>>,
+    counter_repo: &State<Arc<dyn SessionCounterRepository>>,
     date_range: Option<DateRange>,
 ) -> Result<Json<Response<SessionCounterSummary>>, Json<ErrorResponse>> {
-    get_session_counter_impl(redis_pool, db, date_range).await
+    get_session_counter_impl(session_repo, counter_repo, date_range).await
 }
 
 // Shared implementation for both endpoints
 async fn get_session_counter_impl(
-    redis_pool: &State<Pool>,
-    db: &State<DatabaseConnection>,
+    session_repo: &State<Arc<dyn SessionRepository>>,
+    counter_repo: &State<Arc<dyn SessionCounterRepository>>,
     date_range: Option<DateRange>,
 ) -> Result<Json<Response<SessionCounterSummary>>, Json<ErrorResponse>> {
     let date_range = get_date_range_local(date_range);
     // DBを最新情報に更新
-    let _ = put_session(redis_pool, db).await.map_err(|e| e);
-    // upsertの結果を取得
-    let session_count_summaries = SessionCounter::find()
-        .filter(
-            session_counter::Column::UpdatedAt.between(date_range.start_date, date_range.end_date),
-        )
-        .select_only()
-        .column_as(session_counter::Column::Count.sum(), "sum_count")
-        .into_model::<SessionCounterSummary>()
-        .all(db.inner())
+    let _ = put_session(session_repo, counter_repo).await.map_err(|e| e);
+    
+    // 指定期間の合計を取得
+    let sum_count = counter_repo
+        .sum_count_between(date_range.start_date, date_range.end_date)
         .await
         .map_err(|e| {
             Json(ErrorResponse {
-                error: format!("Failed to execute query: {:?}", e),
+                error: format!("Failed to get count summary: {:?}", e),
             })
         })?;
-
-    log::debug!("session_count_summaries: {:?}", session_count_summaries);
-
+    
     let res = Response {
         message: "指定期間のクリック数を取得しました".to_string(),
-        result: session_count_summaries[0].clone(),
+        result: SessionCounterSummary { 
+            sum_count: Decimal::from(sum_count) 
+        },
     };
     Ok(Json(res))
 }
@@ -495,10 +459,24 @@ async fn rocket() -> _ {
         .get_cors_options()
         .expect("Error while building CORS");
 
+    // Create repository instances
+    let session_repo: Arc<dyn SessionRepository> = Arc::new(RedisSessionRepository::new(
+        Arc::new(redis_pool.clone()),
+    ));
+    let counter_repo: Arc<dyn SessionCounterRepository> = Arc::new(DbSessionCounterRepository::new(
+        Arc::new(db.clone()),
+    ));
+    let history_repo: Arc<dyn StatusHistoryRepository> = Arc::new(DbStatusHistoryRepository::new(
+        Arc::new(db.clone()),
+    ));
+
     rocket::build()
         .manage(redis_pool)
         .manage(db)
         .manage(app_config)
+        .manage(session_repo)
+        .manage(counter_repo)
+        .manage(history_repo)
         .mount(
             "/",
             routes![

@@ -1615,6 +1615,7 @@ dependencies = [
 name = "opt"
 version = "0.1.0"
 dependencies = [
+ "async-trait",
  "chrono",
  "chrono-tz",
  "deadpool-redis",
