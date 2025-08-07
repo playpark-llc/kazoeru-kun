@@ -29,7 +29,7 @@ localhost:3000
        - redisのkey, valueからMySQLのテーブルSessionCounterをupsert
        - redisのvalueがSessionCounterのsessionIdに存在する場合、対象レコードを(key, value + count) -> (sessionId, count)として更新
        - redisのvalueがSessionCounterのsessionIdに存在しなければ、(key, value) -> (sessionId, count)として新規レコード作成
-    3. `GET /count_summary?<start_date=yyyy-mm-dd>&<end_date=yyyy-mm-dd>`
+    3. `GET /session_counter?<start_date=yyyy-mm-dd>&<end_date=yyyy-mm-dd>`
        - 画面表示
        - 指定期間(デフォルト：先週の月〜日)のSessionCounter.count合計を取得
 - front
