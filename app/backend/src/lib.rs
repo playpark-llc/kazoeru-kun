@@ -2,6 +2,7 @@ pub mod config;
 pub mod models;
 pub mod repositories;
 pub mod sea_generated;
+pub mod services;
 
 use chrono::{DateTime, Datelike, Days, DurationRound, Local, NaiveDate, TimeDelta};
 use deadpool_redis::{Connection, Pool};
