@@ -3,7 +3,7 @@ use chrono::{DateTime, Local, TimeZone};
 use sea_orm::prelude::Decimal;
 use serde::{Deserialize, Serialize};
 
-use crate::models::domain::{calculate_rank_change, apply_rank_change, get_current_week_range};
+use crate::models::domain::{calculate_rank_change, apply_rank_change, get_last_week_range};
 use crate::repositories::{
     SessionCounterRepository, StatusHistoryRepository, 
     CreateStatusHistory, RepositoryError
@@ -41,14 +41,14 @@ impl StatusService {
 
     /// 週次ステータスを更新
     pub async fn update_weekly_status(&self, target_value: i64) -> Result<StatusUpdateResult, RepositoryError> {
-        // 今週の期間を取得
-        let (week_start, week_end) = get_current_week_range();
+        // 先週の期間を取得
+        let (week_start, week_end) = get_last_week_range();
         
         // ローカルタイムゾーンに変換
         let start_date_local = Local.from_utc_datetime(&week_start.naive_utc());
         let end_date_local = Local.from_utc_datetime(&week_end.naive_utc());
         
-        // 今週のカウント合計を計算
+        // 先週のカウント合計を計算
         let weekly_count = self.counter_repo
             .sum_count_between(start_date_local, end_date_local)
             .await?;
@@ -77,7 +77,7 @@ impl StatusService {
             new_status
         );
         
-        // 今週の記録が既に存在するかチェック
+        // 先週の記録が既に存在するかチェック
         let existing_records = self.status_history_repo
             .find_by_date_range(start_date_local, end_date_local)
             .await?;
@@ -224,9 +224,9 @@ mod tests {
             Ok(records
                 .iter()
                 .filter(|r| {
-                    let record_start = Local.from_local_datetime(&r.start_date.and_hms_opt(0, 0, 0).unwrap()).single().unwrap_or(start);
-                    let record_end = Local.from_local_datetime(&r.end_date.and_hms_opt(0, 0, 0).unwrap()).single().unwrap_or(end);
-                    record_start == start && record_end == end
+                    // 日付の比較を簡略化
+                    r.start_date == start.naive_local().date() && 
+                    r.end_date == end.naive_local().date()
                 })
                 .cloned()
                 .collect())
