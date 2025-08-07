@@ -310,7 +310,35 @@ async fn put_status_history(
     log::debug!("Current status: {:?}, Rank change: {}, New status: {:?}", 
                current_status, rank_change, new_status);
     
-    // Insert new status history record
+    // Check if a record already exists for the current week
+    let existing_record = StatusHistory::find()
+        .filter(status_history::Column::StartDate.eq(start_date_local.naive_local()))
+        .filter(status_history::Column::EndDate.eq(end_date_local.naive_local()))
+        .one(db.inner())
+        .await
+        .map_err(|e| {
+            Json(ErrorResponse {
+                error: format!("Failed to check existing status history: {:?}", e),
+            })
+        })?;
+    
+    // If a record already exists for this period, skip insertion
+    if existing_record.is_some() {
+        log::debug!("Status history record already exists for period {} to {}", 
+                   start_date_local.naive_local(), end_date_local.naive_local());
+        
+        let res = Response {
+            message: format!(
+                "Status history already exists for this period (count: {}, target: {})",
+                weekly_count, target_value
+            ),
+            result: "Skipped".to_string(),
+        };
+        
+        return Ok(Json(res));
+    }
+    
+    // Insert new status history record only if it doesn't exist
     let new_record = status_history::ActiveModel {
         start_date: Set(start_date_local.naive_local()),
         end_date: Set(end_date_local.naive_local()),
