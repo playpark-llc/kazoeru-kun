@@ -1,9 +1,12 @@
 mod config;
+mod error;
 mod models;
 mod repositories;
+mod retry;
 mod sea_generated;
 
 use crate::config::AppConfig;
+use crate::error::AppError;
 use crate::repositories::{
     RedisSessionRepository, SessionRepository,
     DbSessionCounterRepository, SessionCounterRepository,
@@ -44,8 +47,10 @@ extern crate rocket;
 async fn post_session(
     session_repo: &State<Arc<dyn SessionRepository>>,
     cookies: &CookieJar<'_>,
-) -> Result<Json<Response<SessionCount>>, Json<ErrorResponse>> {
+) -> Result<Json<Response<SessionCount>>, AppError> {
     let session_id: String;
+    let mut need_new_session = false;
+    
     let some_cookie = cookies.get("session");
     match some_cookie {
         Some(cookie) => {
@@ -56,33 +61,45 @@ async fn post_session(
                 cookie.expires()
             );
             session_id = cookie.value().to_string();
+            
+            // Check if session is still valid in Redis
+            let is_valid = session_repo
+                .is_valid(&session_id)
+                .await
+                .map_err(|e| AppError::from(e))?;
+            
+            if !is_valid {
+                log::info!("Session {} has expired or doesn't exist, creating new session", session_id);
+                need_new_session = true;
+            }
         }
         None => {
-            let expiration = create_expiration();
-            session_id = create_session_cookie_with_expiration(cookies, expiration);
+            need_new_session = true;
+            session_id = String::new(); // Will be replaced
         }
     }
+    
+    let final_session_id = if need_new_session {
+        let expiration = create_expiration();
+        create_session_cookie_with_expiration(cookies, expiration)
+    } else {
+        session_id
+    };
 
     // redisにセッションIDを保存
     let session_count = session_repo
-        .increment(&session_id)
+        .increment(&final_session_id)
         .await
-        .map_err(|e| Json(ErrorResponse {
-            error: format!("Failed to incr session_id to redis: {:?}", e),
-        }))?;
+        .map_err(|e| AppError::from(e))?;
 
     let res = match session_count {
         // session_idのカウントが1の場合は有効期限を設定
         1 => {
             let expiration = create_expiration();
             session_repo
-                .set_expiration(&session_id, expiration.timestamp())
+                .set_expiration(&final_session_id, expiration.timestamp())
                 .await
-                .map_err(|e| {
-                    Json(ErrorResponse {
-                        error: format!("Failed to set expiration to redis: {:?}", e),
-                    })
-                })?;
+                .map_err(|e| AppError::from(e))?;
 
             Response {
                 message: "新規セッションが登録されました".to_string(),
@@ -105,14 +122,12 @@ async fn put_session(
     session_repo: &State<Arc<dyn SessionRepository>>,
     counter_repo: &State<Arc<dyn SessionCounterRepository>>,
     db: &State<DatabaseConnection>,
-) -> Result<Json<Response<String>>, Json<ErrorResponse>> {
+) -> Result<Json<Response<String>>, AppError> {
     // Redisから全セッション情報を取得
     let sessions = session_repo
         .get_all_sessions()
         .await
-        .map_err(|e| Json(ErrorResponse {
-            error: format!("Failed to get sessions from redis: {:?}", e),
-        }))?;
+        .map_err(|e| AppError::from(e))?;
 
     if sessions.is_empty() {
         return Ok(Json(Response {
@@ -133,9 +148,7 @@ async fn put_session(
     let txn = db
         .begin()
         .await
-        .map_err(|e| Json(ErrorResponse {
-            error: format!("Failed to begin transaction: {:?}", e),
-        }))?;
+        .map_err(|e| AppError::DatabaseTransactionError(format!("Failed to begin transaction: {:?}", e)))?;
 
     match counter_repo
         .upsert_many_with_txn(insert_records, &txn)
@@ -144,15 +157,11 @@ async fn put_session(
         Ok(_) => {
             txn.commit()
                 .await
-                .map_err(|e| Json(ErrorResponse {
-                    error: format!("Failed to commit transaction: {:?}", e),
-                }))?;
+                .map_err(|e| AppError::DatabaseTransactionError(format!("Failed to commit transaction: {:?}", e)))?;
         }
         Err(e) => {
             let _ = txn.rollback().await;
-            return Err(Json(ErrorResponse {
-                error: format!("Failed to upsert session_counter table: {:?}", e),
-            }));
+            return Err(AppError::from(e));
         }
     }
 

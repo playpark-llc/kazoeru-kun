@@ -1,6 +1,8 @@
 pub mod config;
+pub mod error;
 pub mod models;
 pub mod repositories;
+pub mod retry;
 pub mod sea_generated;
 
 use chrono::{DateTime, Datelike, Days, DurationRound, Local, NaiveDate, TimeDelta};
