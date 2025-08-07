@@ -1,3 +1,8 @@
+pub mod config;
+pub mod models;
+pub mod repositories;
+pub mod sea_generated;
+
 use chrono::{DateTime, Datelike, Days, DurationRound, Local, NaiveDate, TimeDelta};
 use deadpool_redis::{Connection, Pool};
 use rand::{distributions::Alphanumeric, thread_rng, Rng};
