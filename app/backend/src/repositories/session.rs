@@ -1,9 +1,8 @@
 use async_trait::async_trait;
 use deadpool_redis::{
-    redis::{AsyncCommands, AsyncIter},
+    redis::{self, AsyncCommands},
     Pool,
 };
-use futures::stream::StreamExt;
 use std::sync::Arc;
 
 use super::Result;
@@ -57,25 +56,51 @@ impl SessionRepository for RedisSessionRepository {
 
     async fn get_all_sessions(&self) -> Result<Vec<SessionData>> {
         let mut conn = self.pool.get().await?;
-        let mut iter: AsyncIter<String> = conn.scan().await?;
+        
+        // First, collect all session keys
+        let keys: Vec<String> = conn.keys("*").await?;
+        
+        if keys.is_empty() {
+            return Ok(Vec::new());
+        }
+
         let mut sessions = Vec::new();
-
-        while let Some(session_id) = iter.next().await {
-            let mut conn = self.pool.get().await?;
-            let count: i32 = conn.get(&session_id).await.unwrap_or(0);
+        
+        // Use pipeline for batch operations
+        let mut pipe = redis::pipe();
+        for key in &keys {
+            pipe.get(key);
+            pipe.ttl(key);
+        }
+        
+        let results: Vec<redis::Value> = pipe.query_async(&mut conn).await?;
+        
+        // Process results in pairs (get result, ttl result)
+        for (i, key) in keys.iter().enumerate() {
+            let count_idx = i * 2;
+            let ttl_idx = i * 2 + 1;
             
-            let ttl: i64 = conn.ttl(&session_id).await.unwrap_or(-1);
-            let expiration = if ttl > 0 {
-                Some(chrono::Local::now().timestamp() + ttl)
-            } else {
-                None
-            };
-
-            sessions.push(SessionData {
-                session_id,
-                count,
-                expiration,
-            });
+            if let Some(redis::Value::Data(data)) = results.get(count_idx) {
+                let count: i32 = String::from_utf8_lossy(data).parse().unwrap_or(0);
+                
+                let ttl = if let Some(redis::Value::Int(ttl_val)) = results.get(ttl_idx) {
+                    *ttl_val
+                } else {
+                    -1
+                };
+                
+                let expiration = if ttl > 0 {
+                    Some(chrono::Local::now().timestamp() + ttl)
+                } else {
+                    None
+                };
+                
+                sessions.push(SessionData {
+                    session_id: key.clone(),
+                    count,
+                    expiration,
+                });
+            }
         }
 
         Ok(sessions)

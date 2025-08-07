@@ -77,19 +77,19 @@ impl SessionCounterRepository for DbSessionCounterRepository {
             .update_column(session_counter::Column::Count)
             .to_owned();
 
-        SessionCounter::insert(active_model)
+        let result = SessionCounter::insert(active_model)
             .on_conflict(on_conflict)
             .exec(&*self.db)
-            .await
-            .map_err(|e| {
-                if e != sea_orm::DbErr::RecordNotInserted {
-                    RepositoryError::from(e)
-                } else {
-                    RepositoryError::DatabaseError("No records inserted".to_string())
-                }
-            })?;
+            .await;
 
-        Ok(())
+        match result {
+            Ok(_) => Ok(()),
+            Err(sea_orm::DbErr::RecordNotInserted) => {
+                // This is expected for upsert when record exists and is updated
+                Ok(())
+            }
+            Err(e) => Err(RepositoryError::from(e)),
+        }
     }
 
     async fn upsert_many(&self, data: Vec<CreateSessionCounter>) -> Result<()> {
@@ -110,19 +110,19 @@ impl SessionCounterRepository for DbSessionCounterRepository {
             .update_column(session_counter::Column::Count)
             .to_owned();
 
-        SessionCounter::insert_many(active_models)
+        let result = SessionCounter::insert_many(active_models)
             .on_conflict(on_conflict)
             .exec(&*self.db)
-            .await
-            .map_err(|e| {
-                if e != sea_orm::DbErr::RecordNotInserted {
-                    RepositoryError::from(e)
-                } else {
-                    RepositoryError::DatabaseError("No records inserted".to_string())
-                }
-            })?;
+            .await;
 
-        Ok(())
+        match result {
+            Ok(_) => Ok(()),
+            Err(sea_orm::DbErr::RecordNotInserted) => {
+                // This is expected for upsert when all records exist and are updated
+                Ok(())
+            }
+            Err(e) => Err(RepositoryError::from(e)),
+        }
     }
 
     async fn find_by_session_id(&self, session_id: &str) -> Result<Option<SessionCounterData>> {

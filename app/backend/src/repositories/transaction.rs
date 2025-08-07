@@ -11,7 +11,7 @@ pub trait TransactionManager: Send + Sync {
     async fn rollback(&self, txn: DatabaseTransaction) -> Result<()>;
     async fn with_transaction<F, R, Fut>(&self, f: F) -> Result<R>
     where
-        F: FnOnce(DatabaseTransaction) -> Fut + Send,
+        F: FnOnce(&DatabaseTransaction) -> Fut + Send,
         Fut: std::future::Future<Output = Result<R>> + Send,
         R: Send;
 }
@@ -49,15 +49,24 @@ impl TransactionManager for TransactionManagerImpl {
 
     async fn with_transaction<F, R, Fut>(&self, f: F) -> Result<R>
     where
-        F: FnOnce(DatabaseTransaction) -> Fut + Send,
+        F: FnOnce(&DatabaseTransaction) -> Fut + Send,
         Fut: std::future::Future<Output = Result<R>> + Send,
         R: Send,
     {
         let txn = self.begin().await?;
         
-        match f(txn).await {
-            Ok(result) => Ok(result),
-            Err(e) => Err(e),
+        match f(&txn).await {
+            Ok(result) => {
+                txn.commit()
+                    .await
+                    .map_err(|e| RepositoryError::TransactionError(e.to_string()))?;
+                Ok(result)
+            }
+            Err(e) => {
+                // Attempt to rollback, but return the original error regardless
+                let _ = txn.rollback().await;
+                Err(e)
+            }
         }
     }
 }
@@ -89,13 +98,9 @@ mod tests {
                 };
 
                 SessionCounter::insert(active_model)
-                    .exec(&txn)
+                    .exec(txn)
                     .await
                     .map_err(|e| RepositoryError::DatabaseError(e.to_string()))?;
-
-                txn.commit()
-                    .await
-                    .map_err(|e| RepositoryError::TransactionError(e.to_string()))?;
 
                 Ok(())
             })
@@ -117,7 +122,7 @@ mod tests {
         let db = Arc::new(create_test_db().await);
         let tx_manager = TransactionManagerImpl::new(db.clone());
 
-        let result = tx_manager
+        let result: Result<()> = tx_manager
             .with_transaction(|txn| async move {
                 let active_model = session_counter::ActiveModel {
                     session_id: Set("tx_test_rollback".to_string()),
@@ -126,19 +131,18 @@ mod tests {
                 };
 
                 SessionCounter::insert(active_model)
-                    .exec(&txn)
+                    .exec(txn)
                     .await
                     .map_err(|e| RepositoryError::DatabaseError(e.to_string()))?;
 
-                txn.rollback()
-                    .await
-                    .map_err(|e| RepositoryError::TransactionError(e.to_string()))?;
-
-                Ok(())
+                // Simulate an error to trigger rollback
+                Err(RepositoryError::DatabaseError(
+                    "Intentional rollback".to_string(),
+                ))
             })
             .await;
 
-        assert!(result.is_ok());
+        assert!(result.is_err());
 
         let found = SessionCounter::find()
             .filter(session_counter::Column::SessionId.eq("tx_test_rollback"))
@@ -163,7 +167,7 @@ mod tests {
                 };
 
                 SessionCounter::insert(active_model)
-                    .exec(&txn)
+                    .exec(txn)
                     .await
                     .map_err(|e| RepositoryError::DatabaseError(e.to_string()))?;
 

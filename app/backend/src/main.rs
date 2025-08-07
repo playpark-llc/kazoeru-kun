@@ -145,7 +145,8 @@ async fn put_session(
 
 #[put("/status_history")]
 async fn put_status_history(
-    db: &State<DatabaseConnection>,
+    status_history_repo: &State<Arc<dyn StatusHistoryRepository>>,
+    counter_repo: &State<Arc<dyn SessionCounterRepository>>,
     config: &State<AppConfig>,
 ) -> Result<Json<Response<String>>, Json<ErrorResponse>> {
     // Get target value from configuration
@@ -159,12 +160,8 @@ async fn put_status_history(
     let end_date_local = Local.from_utc_datetime(&week_end.naive_utc());
 
     // Calculate the sum of session counts for the current week
-    let session_count_result = SessionCounter::find()
-        .filter(session_counter::Column::UpdatedAt.between(start_date_local, end_date_local))
-        .select_only()
-        .column_as(session_counter::Column::Count.sum(), "sum_count")
-        .into_model::<SessionCounterSummary>()
-        .all(db.inner())
+    let weekly_count = counter_repo
+        .sum_count_between(start_date_local, end_date_local)
         .await
         .map_err(|e| {
             Json(ErrorResponse {
@@ -172,18 +169,11 @@ async fn put_status_history(
             })
         })?;
 
-    let weekly_count = session_count_result
-        .first()
-        .and_then(|r| r.sum_count.to_string().parse::<i64>().ok())
-        .unwrap_or(0);
-
     log::debug!("Weekly count: {}, Target: {}", weekly_count, target_value);
 
     // Get the current status from the database (most recent entry)
-    let current_status_result = StatusHistory::find()
-        .order_by_desc(status_history::Column::CreatedAt)
-        .limit(1)
-        .one(db.inner())
+    let current_status_result = status_history_repo
+        .get_latest()
         .await
         .map_err(|e| {
             Json(ErrorResponse {
@@ -209,16 +199,19 @@ async fn put_status_history(
     );
 
     // Check if a record already exists for the current week
-    let existing_record = StatusHistory::find()
-        .filter(status_history::Column::StartDate.eq(start_date_local.naive_local()))
-        .filter(status_history::Column::EndDate.eq(end_date_local.naive_local()))
-        .one(db.inner())
+    let existing_records = status_history_repo
+        .find_by_date_range(start_date_local, end_date_local)
         .await
         .map_err(|e| {
             Json(ErrorResponse {
                 error: format!("Failed to check existing status history: {:?}", e),
             })
         })?;
+    
+    let existing_record = existing_records.into_iter().find(|r| 
+        r.start_date == start_date_local.naive_local().date() && 
+        r.end_date == end_date_local.naive_local().date()
+    );
 
     // If a record already exists for this period, skip insertion
     if let Some(existing) = existing_record {
@@ -245,16 +238,18 @@ async fn put_status_history(
     }
 
     // Insert new status history record only if it doesn't exist
-    let new_record = status_history::ActiveModel {
-        start_date: Set(start_date_local.naive_local()),
-        end_date: Set(end_date_local.naive_local()),
-        count: Set(Decimal::from(weekly_count)),
-        status: Set(new_status.clone()),
-        ..Default::default()
+    use crate::repositories::status_history::CreateStatusHistory;
+    use sea_orm::prelude::Decimal;
+    
+    let new_record = CreateStatusHistory {
+        start_date: start_date_local.naive_local().date(),
+        end_date: end_date_local.naive_local().date(),
+        count: Decimal::from(weekly_count),
+        status: new_status.clone(),
     };
 
-    StatusHistory::insert(new_record)
-        .exec(db.inner())
+    status_history_repo
+        .create(new_record)
         .await
         .map_err(|e| {
             Json(ErrorResponse {
@@ -283,16 +278,14 @@ async fn put_status_history(
 
 #[get("/status_history?<limit>&<offset>&<date_range..>")]
 async fn get_status_history(
-    db: &State<DatabaseConnection>,
+    status_history_repo: &State<Arc<dyn StatusHistoryRepository>>,
     limit: Option<u64>,
     offset: Option<u64>,
     date_range: Option<DateRange>,
 ) -> Result<Json<Response<StatusHistoryResponse>>, Json<ErrorResponse>> {
     // Get the current status (most recent entry)
-    let current_status = StatusHistory::find()
-        .order_by_desc(status_history::Column::CreatedAt)
-        .limit(1)
-        .one(db.inner())
+    let current_status = status_history_repo
+        .get_latest()
         .await
         .map_err(|e| {
             Json(ErrorResponse {
@@ -303,60 +296,49 @@ async fn get_status_history(
     // Convert current status to response format
     let current_status_record = current_status.map(|s| StatusHistoryRecord {
         id: s.id,
-        start_date: s.start_date.date(),
-        end_date: s.end_date.date(),
+        start_date: s.start_date,
+        end_date: s.end_date,
         count: s.count,
         status: status_to_string(s.status),
-        created_at: s.created_at,
+        created_at: s.created_at.naive_local(),
     });
-
-    // Build query for historical records
-    let mut query = StatusHistory::find();
-
-    // Apply date range filter if provided
-    if let Some(range) = date_range {
-        let date_range = get_date_range_local(Some(range));
-        query = query.filter(
-            status_history::Column::StartDate
-                .gte(date_range.start_date.date_naive())
-                .and(status_history::Column::EndDate.lte(date_range.end_date.date_naive())),
-        );
-    }
-
-    // Get total count before pagination
-    let total_count = query.clone().count(db.inner()).await.map_err(|e| {
-        Json(ErrorResponse {
-            error: format!("Failed to count status history: {:?}", e),
-        })
-    })? as usize;
 
     // Apply pagination parameters
     let limit = limit.unwrap_or(100); // Default limit of 100
     let offset = offset.unwrap_or(0); // Default offset of 0
 
     // Get historical records ordered by date with pagination
-    let history_records = query
-        .order_by_desc(status_history::Column::StartDate)
-        .limit(limit)
-        .offset(offset)
-        .all(db.inner())
-        .await
-        .map_err(|e| {
-            Json(ErrorResponse {
-                error: format!("Failed to get status history: {:?}", e),
-            })
-        })?;
+    let (history_records, total_count) = if let Some(range) = date_range {
+        let date_range = get_date_range_local(Some(range));
+        status_history_repo
+            .list_by_date_range(date_range.start_date, date_range.end_date, limit, offset)
+            .await
+            .map_err(|e| {
+                Json(ErrorResponse {
+                    error: format!("Failed to get status history: {:?}", e),
+                })
+            })?
+    } else {
+        status_history_repo
+            .list(limit, offset)
+            .await
+            .map_err(|e| {
+                Json(ErrorResponse {
+                    error: format!("Failed to get status history: {:?}", e),
+                })
+            })?
+    };
 
     // Convert to response format
     let history: Vec<StatusHistoryRecord> = history_records
         .into_iter()
         .map(|h| StatusHistoryRecord {
             id: h.id,
-            start_date: h.start_date.date(),
-            end_date: h.end_date.date(),
+            start_date: h.start_date,
+            end_date: h.end_date,
             count: h.count,
             status: status_to_string(h.status),
-            created_at: h.created_at,
+            created_at: h.created_at.naive_local(),
         })
         .collect();
 
@@ -366,11 +348,11 @@ async fn get_status_history(
         current_status: current_status_record,
         history,
         total_records: filtered_records,
-        total_count,
+        total_count: total_count as usize,
         page_info: PageInfo {
             limit,
             offset,
-            has_more: (offset as usize + filtered_records) < total_count,
+            has_more: (offset as usize + filtered_records) < total_count as usize,
         },
     };
 
