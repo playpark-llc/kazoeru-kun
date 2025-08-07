@@ -88,7 +88,13 @@ impl SessionRepository for RedisSessionRepository {
             let ttl_idx = i * 2 + 1;
             
             if let Some(redis::Value::Data(data)) = results.get(count_idx) {
-                let count: i32 = String::from_utf8_lossy(data).parse().unwrap_or(0);
+                let count: i32 = String::from_utf8_lossy(data)
+                    .parse()
+                    .map_err(|e| {
+                        log::warn!("Failed to parse Redis value for key {}: {}", key, e);
+                        e
+                    })
+                    .unwrap_or(0);
                 
                 let ttl = if let Some(redis::Value::Int(ttl_val)) = results.get(ttl_idx) {
                     *ttl_val
