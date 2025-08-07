@@ -1,4 +1,5 @@
 mod sea_generated;
+mod config;
 
 use deadpool_redis::{
     redis::{AsyncCommands, AsyncIter},
@@ -14,13 +15,12 @@ use rocket::{
     serde::{json::Json, Serialize},
     State,
 };
-use rocket_cors::{AllowedOrigins, CorsOptions};
 use sea_generated::{prelude::{SessionCounter, StatusHistory}, session_counter, status_history, sea_orm_active_enums::Status};
 use sea_orm::{
     prelude::Decimal, sea_query::OnConflict, ColumnTrait, Database, DatabaseConnection, DbErr,
     EntityTrait, FromQueryResult, QueryFilter, QuerySelect, Set, QueryOrder, PaginatorTrait,
 };
-use std::env;
+use crate::config::AppConfig;
 use chrono::{Datelike, Duration, Local, NaiveDate, Weekday, TimeZone};
 use chrono_tz::Asia::Tokyo;
 
@@ -286,12 +286,10 @@ fn apply_rank_change(current_status: Status, rank_change: i32) -> Status {
 #[put("/status_history")]
 async fn put_status_history(
     db: &State<DatabaseConnection>,
+    config: &State<AppConfig>,
 ) -> Result<Json<Response<String>>, Json<ErrorResponse>> {
-    // Get target value from environment variable (default: 100000)
-    let target_value: i64 = env::var("TARGET_VALUE")
-        .unwrap_or_else(|_| "100000".to_string())
-        .parse()
-        .unwrap_or(100000);
+    // Get target value from configuration
+    let target_value: i64 = config.target_value;
     
     // Get current week range in Japan time
     let (week_start, week_end) = get_current_week_range();
@@ -564,36 +562,32 @@ async fn rocket() -> _ {
     // Initialize logger
     env_logger::init();
     
+    // Load configuration
+    let app_config = AppConfig::from_env()
+        .expect("Failed to load configuration");
+    
     // Configオブジェクトの作成
     let mut cfg = Config::default();
     log::debug!("Redis config before url: {:?}", cfg);
     cfg.connection = None;
-    cfg.url = Some(env::var("REDIS_URL")
-        .expect("REDIS_URL environment variable must be set"));
+    cfg.url = Some(app_config.redis.url.clone());
     log::debug!("Redis config after url: {:?}", cfg);
 
     // プールの作成
     let redis_pool = cfg.create_pool(Some(Runtime::Tokio1))
         .expect("Failed to create Redis connection pool");
 
-    let db: DatabaseConnection = Database::connect(env::var("DATABASE_URL")
-        .expect("DATABASE_URL environment variable must be set"))
+    let db: DatabaseConnection = Database::connect(&app_config.database.url)
         .await
         .expect("Failed to connect to database");
-    let allowed_origins: Vec<String> = env::var("ALLOWED_ORIGINS")
-        .expect("ALLOWED_ORIGINS environment variable must be set")
-        .split(',')
-        .map(|s| s.to_string())
-        .collect();
-    let exact = allowed_origins;
-    let cors = CorsOptions::default()
-        .allowed_origins(AllowedOrigins::some_exact(&exact))
-        .to_cors()
+    
+    let cors = app_config.get_cors_options()
         .expect("Error while building CORS");
 
     rocket::build()
         .manage(redis_pool)
         .manage(db)
+        .manage(app_config)
         .mount("/", routes![post_session, put_session, put_status_history, get_status_history, get_session_counter, get_count_summary])
         .attach(cors)
 }
