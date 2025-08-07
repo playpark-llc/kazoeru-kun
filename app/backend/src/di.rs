@@ -10,7 +10,7 @@ use crate::repositories::{
     DbStatusHistoryRepository, StatusHistoryRepository,
 };
 use crate::services::{
-    SessionService, StatusService, SyncService,
+    SessionService, StatusService, SyncService, HealthService,
 };
 
 /// 依存性注入コンテナ
@@ -31,6 +31,7 @@ pub struct DiContainer {
     pub session_service: Arc<SessionService>,
     pub status_service: Arc<StatusService>,
     pub sync_service: Arc<SyncService>,
+    pub health_service: Arc<HealthService>,
 }
 
 impl DiContainer {
@@ -59,6 +60,10 @@ impl DiContainer {
             history_repo.clone(),
             counter_repo.clone(),
         ));
+        let health_service = Arc::new(HealthService::new(
+            db.clone(),
+            redis_pool.clone(),
+        ));
         
         Ok(Self {
             config,
@@ -70,6 +75,7 @@ impl DiContainer {
             session_service,
             status_service,
             sync_service,
+            health_service,
         })
     }
     

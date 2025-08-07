@@ -30,6 +30,7 @@ async fn rocket() -> _ {
         .manage(container.session_service.clone())
         .manage(container.status_service.clone())
         .manage(container.sync_service.clone())
+        .manage(container.health_service.clone())
         // Manage repositories for direct access if needed
         .manage(container.session_repo.clone())
         .manage(container.counter_repo.clone())
