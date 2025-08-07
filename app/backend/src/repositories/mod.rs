@@ -4,7 +4,9 @@ pub mod status_history;
 pub mod transaction;
 
 pub use session::{RedisSessionRepository, SessionRepository};
-pub use session_counter::{CreateSessionCounter, DbSessionCounterRepository, SessionCounterRepository};
+pub use session_counter::{
+    CreateSessionCounter, DbSessionCounterRepository, SessionCounterRepository,
+};
 pub use status_history::{CreateStatusHistory, DbStatusHistoryRepository, StatusHistoryRepository};
 pub use transaction::{TransactionManager, TransactionManagerImpl};
 

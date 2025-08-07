@@ -1,10 +1,9 @@
-use std::sync::Arc;
 use sea_orm::{DatabaseConnection, TransactionTrait};
 use serde::{Deserialize, Serialize};
+use std::sync::Arc;
 
 use crate::repositories::{
-    SessionRepository, SessionCounterRepository,
-    CreateSessionCounter, RepositoryError
+    CreateSessionCounter, RepositoryError, SessionCounterRepository, SessionRepository,
 };
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -38,7 +37,7 @@ impl SyncService {
     pub async fn sync_sessions_to_database(&self) -> Result<SyncResult, RepositoryError> {
         // Redisから全セッション情報を取得
         let sessions = self.session_repo.get_all_sessions().await?;
-        
+
         if sessions.is_empty() {
             log::info!("No sessions to sync from Redis to MySQL");
             return Ok(SyncResult {
@@ -51,7 +50,7 @@ impl SyncService {
 
         let total_sessions = sessions.len();
         log::info!("Syncing {} sessions from Redis to MySQL", total_sessions);
-        
+
         // セッションデータをCreateSessionCounterに変換
         let insert_records: Vec<CreateSessionCounter> = sessions
             .into_iter()
@@ -60,16 +59,16 @@ impl SyncService {
                 count: session.count,
             })
             .collect();
-        
+
         // トランザクション内でデータベースにupsert
         let result = self.sync_with_transaction(insert_records).await?;
-        
+
         let message = if result {
             format!("{}件のセッション情報をDBに同期しました", total_sessions)
         } else {
             "セッション同期中にエラーが発生しました".to_string()
         };
-        
+
         Ok(SyncResult {
             synced_count: if result { total_sessions } else { 0 },
             total_sessions,
@@ -77,19 +76,24 @@ impl SyncService {
             success: result,
         })
     }
-    
+
     /// トランザクション内で同期を実行
-    async fn sync_with_transaction(&self, records: Vec<CreateSessionCounter>) -> Result<bool, RepositoryError> {
-        let txn = self.db
-            .begin()
-            .await
-            .map_err(|e| RepositoryError::TransactionError(format!("Failed to begin transaction: {:?}", e)))?;
-        
+    async fn sync_with_transaction(
+        &self,
+        records: Vec<CreateSessionCounter>,
+    ) -> Result<bool, RepositoryError> {
+        let txn = self.db.begin().await.map_err(|e| {
+            RepositoryError::TransactionError(format!("Failed to begin transaction: {:?}", e))
+        })?;
+
         match self.counter_repo.upsert_many_with_txn(records, &txn).await {
             Ok(_) => {
-                txn.commit()
-                    .await
-                    .map_err(|e| RepositoryError::TransactionError(format!("Failed to commit transaction: {:?}", e)))?;
+                txn.commit().await.map_err(|e| {
+                    RepositoryError::TransactionError(format!(
+                        "Failed to commit transaction: {:?}",
+                        e
+                    ))
+                })?;
                 Ok(true)
             }
             Err(e) => {
@@ -99,12 +103,12 @@ impl SyncService {
             }
         }
     }
-    
+
     /// 期限切れセッションのクリーンアップ
     pub async fn cleanup_expired_sessions(&self) -> Result<usize, RepositoryError> {
         let sessions = self.session_repo.get_all_sessions().await?;
         let mut cleaned_count = 0;
-        
+
         for session in sessions {
             // 有効期限が設定されていて、期限切れのセッションを削除
             if let Some(expiration) = session.expiration {
@@ -116,11 +120,11 @@ impl SyncService {
                 }
             }
         }
-        
+
         if cleaned_count > 0 {
             log::info!("Cleaned up {} expired sessions", cleaned_count);
         }
-        
+
         Ok(cleaned_count)
     }
 }
@@ -143,7 +147,7 @@ mod tests {
                 sessions: Arc::new(Mutex::new(HashMap::new())),
             }
         }
-        
+
         fn add_session(&self, session_id: &str, count: i32, expiration: Option<i64>) {
             let mut sessions = self.sessions.lock().unwrap();
             sessions.insert(session_id.to_string(), (count, expiration));
@@ -156,7 +160,11 @@ mod tests {
             unimplemented!()
         }
 
-        async fn set_expiration(&self, _session_id: &str, _expiration: i64) -> Result<(), RepositoryError> {
+        async fn set_expiration(
+            &self,
+            _session_id: &str,
+            _expiration: i64,
+        ) -> Result<(), RepositoryError> {
             unimplemented!()
         }
 
@@ -164,15 +172,19 @@ mod tests {
             unimplemented!()
         }
 
-        async fn get_all_sessions(&self) -> Result<Vec<crate::repositories::session::SessionData>, RepositoryError> {
+        async fn get_all_sessions(
+            &self,
+        ) -> Result<Vec<crate::repositories::session::SessionData>, RepositoryError> {
             let sessions = self.sessions.lock().unwrap();
             Ok(sessions
                 .iter()
-                .map(|(id, (count, expiration))| crate::repositories::session::SessionData {
-                    session_id: id.clone(),
-                    count: *count,
-                    expiration: *expiration,
-                })
+                .map(
+                    |(id, (count, expiration))| crate::repositories::session::SessionData {
+                        session_id: id.clone(),
+                        count: *count,
+                        expiration: *expiration,
+                    },
+                )
                 .collect())
         }
 
@@ -205,32 +217,60 @@ mod tests {
             unimplemented!()
         }
 
-        async fn upsert_many(&self, _data: Vec<CreateSessionCounter>) -> Result<(), RepositoryError> {
+        async fn upsert_many(
+            &self,
+            _data: Vec<CreateSessionCounter>,
+        ) -> Result<(), RepositoryError> {
             unimplemented!()
         }
 
-        async fn upsert_many_with_txn(&self, data: Vec<CreateSessionCounter>, _txn: &sea_orm::DatabaseTransaction) -> Result<(), RepositoryError> {
+        async fn upsert_many_with_txn(
+            &self,
+            data: Vec<CreateSessionCounter>,
+            _txn: &sea_orm::DatabaseTransaction,
+        ) -> Result<(), RepositoryError> {
             let mut records = self.upserted_records.lock().unwrap();
             records.extend(data);
             Ok(())
         }
 
-        async fn sum_count_between(&self, _start_date: chrono::DateTime<chrono::Local>, _end_date: chrono::DateTime<chrono::Local>) -> Result<i64, RepositoryError> {
+        async fn sum_count_between(
+            &self,
+            _start_date: chrono::DateTime<chrono::Local>,
+            _end_date: chrono::DateTime<chrono::Local>,
+        ) -> Result<i64, RepositoryError> {
             unimplemented!()
         }
 
-        async fn find_by_session_id(&self, _session_id: &str) -> Result<Option<crate::repositories::session_counter::SessionCounterData>, RepositoryError> {
+        async fn find_by_session_id(
+            &self,
+            _session_id: &str,
+        ) -> Result<Option<crate::repositories::session_counter::SessionCounterData>, RepositoryError>
+        {
             unimplemented!()
         }
 
-        async fn find_by_id(&self, _id: i32) -> Result<Option<crate::repositories::session_counter::SessionCounterData>, RepositoryError> {
+        async fn find_by_id(
+            &self,
+            _id: i32,
+        ) -> Result<Option<crate::repositories::session_counter::SessionCounterData>, RepositoryError>
+        {
             unimplemented!()
         }
 
-        async fn list(&self, _limit: u64, _offset: u64) -> Result<(Vec<crate::repositories::session_counter::SessionCounterData>, u64), RepositoryError> {
+        async fn list(
+            &self,
+            _limit: u64,
+            _offset: u64,
+        ) -> Result<
+            (
+                Vec<crate::repositories::session_counter::SessionCounterData>,
+                u64,
+            ),
+            RepositoryError,
+        > {
             unimplemented!()
         }
-
 
         async fn delete(&self, _id: i32) -> Result<(), RepositoryError> {
             unimplemented!()
@@ -245,14 +285,14 @@ mod tests {
     async fn test_sync_empty_sessions() {
         let session_repo = Arc::new(MockSessionRepository::new());
         let counter_repo = Arc::new(MockSessionCounterRepository::new());
-        
+
         // テスト用のインメモリDBを作成（実際のDBは使用しない）
         let db = Arc::new(sea_orm::Database::connect("sqlite::memory:").await.unwrap());
-        
+
         let service = SyncService::new(session_repo, counter_repo, db);
 
         let result = service.sync_sessions_to_database().await.unwrap();
-        
+
         assert_eq!(result.synced_count, 0);
         assert_eq!(result.total_sessions, 0);
         assert!(result.success);
@@ -263,20 +303,20 @@ mod tests {
         let session_repo = Arc::new(MockSessionRepository::new());
         let counter_repo = Arc::new(MockSessionCounterRepository::new());
         let db = Arc::new(sea_orm::Database::connect("sqlite::memory:").await.unwrap());
-        
+
         // 期限切れと有効なセッションを追加
         let now = chrono::Local::now().timestamp();
         session_repo.add_session("expired1", 5, Some(now - 3600)); // 1時間前に期限切れ
         session_repo.add_session("expired2", 3, Some(now - 100)); // 100秒前に期限切れ
         session_repo.add_session("valid1", 10, Some(now + 3600)); // まだ有効
         session_repo.add_session("valid2", 8, None); // 期限なし
-        
+
         let service = SyncService::new(session_repo.clone(), counter_repo, db);
 
         let cleaned_count = service.cleanup_expired_sessions().await.unwrap();
-        
+
         assert_eq!(cleaned_count, 2); // 2つの期限切れセッションが削除される
-        
+
         // 残りのセッションを確認
         let remaining_sessions = session_repo.get_all_sessions().await.unwrap();
         assert_eq!(remaining_sessions.len(), 2);

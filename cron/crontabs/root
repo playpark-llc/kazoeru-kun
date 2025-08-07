@@ -5,5 +5,15 @@
 # 0	2	*	*	*	run-parts /etc/periodic/daily
 # 0	3	*	*	6	run-parts /etc/periodic/weekly
 # 0	5	1	*	*	run-parts /etc/periodic/monthly
-*	*	*	*	*	curl -X PUT back:8000/session
-0	0	*	*	*	curl -X PUT back:8000/status_history
+
+# Health check: every 5 minutes
+*/5	*	*	*	*	/scripts/cron-scripts.sh health 2>&1 | logger -t cron-health
+
+# Session sync: every minute (with retry logic)
+*	*	*	*	*	/scripts/cron-scripts.sh sync 2>&1 | logger -t cron-session
+
+# Status history update: daily at midnight (with retry logic)
+0	0	*	*	*	/scripts/cron-scripts.sh status 2>&1 | logger -t cron-status
+
+# Cleanup expired sessions: every hour (with retry logic)
+0	*	*	*	*	/scripts/cron-scripts.sh cleanup 2>&1 | logger -t cron-cleanup

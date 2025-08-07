@@ -1,32 +1,29 @@
-use std::sync::Arc;
-use sea_orm::DatabaseConnection;
 use deadpool_redis::Pool;
 use rocket_cors::Cors;
+use sea_orm::DatabaseConnection;
+use std::sync::Arc;
 
 use crate::config::AppConfig;
 use crate::repositories::{
-    RedisSessionRepository, SessionRepository,
-    DbSessionCounterRepository, SessionCounterRepository,
-    DbStatusHistoryRepository, StatusHistoryRepository,
+    DbSessionCounterRepository, DbStatusHistoryRepository, RedisSessionRepository,
+    SessionCounterRepository, SessionRepository, StatusHistoryRepository,
 };
-use crate::services::{
-    SessionService, StatusService, SyncService, HealthService,
-};
+use crate::services::{HealthService, SessionService, StatusService, SyncService};
 
 /// 依存性注入コンテナ
 pub struct DiContainer {
     // Configuration
     pub config: AppConfig,
-    
+
     // Infrastructure
     pub db: Arc<DatabaseConnection>,
     pub redis_pool: Arc<Pool>,
-    
+
     // Repositories
     pub session_repo: Arc<dyn SessionRepository>,
     pub counter_repo: Arc<dyn SessionCounterRepository>,
     pub history_repo: Arc<dyn StatusHistoryRepository>,
-    
+
     // Services
     pub session_service: Arc<SessionService>,
     pub status_service: Arc<StatusService>,
@@ -40,15 +37,15 @@ impl DiContainer {
         // Infrastructure層の構築
         let db = Arc::new(create_database_connection(&config.database.url).await?);
         let redis_pool = Arc::new(create_redis_pool(&config.redis)?);
-        
+
         // Repository層の構築
-        let session_repo: Arc<dyn SessionRepository> = 
+        let session_repo: Arc<dyn SessionRepository> =
             Arc::new(RedisSessionRepository::new(redis_pool.clone()));
-        let counter_repo: Arc<dyn SessionCounterRepository> = 
+        let counter_repo: Arc<dyn SessionCounterRepository> =
             Arc::new(DbSessionCounterRepository::new(db.clone()));
-        let history_repo: Arc<dyn StatusHistoryRepository> = 
+        let history_repo: Arc<dyn StatusHistoryRepository> =
             Arc::new(DbStatusHistoryRepository::new(db.clone()));
-        
+
         // Service層の構築
         let session_service = Arc::new(SessionService::new(session_repo.clone()));
         let sync_service = Arc::new(SyncService::new(
@@ -60,11 +57,8 @@ impl DiContainer {
             history_repo.clone(),
             counter_repo.clone(),
         ));
-        let health_service = Arc::new(HealthService::new(
-            db.clone(),
-            redis_pool.clone(),
-        ));
-        
+        let health_service = Arc::new(HealthService::new(db.clone(), redis_pool.clone()));
+
         Ok(Self {
             config,
             db,
@@ -78,7 +72,7 @@ impl DiContainer {
             health_service,
         })
     }
-    
+
     /// CORS設定を取得
     pub fn get_cors(&self) -> Result<Cors, Box<dyn std::error::Error>> {
         self.config.get_cors_options().map_err(|e| e.into())
@@ -92,13 +86,15 @@ async fn create_database_connection(url: &str) -> Result<DatabaseConnection, sea
 }
 
 /// Redis接続プールを作成
-fn create_redis_pool(config: &crate::config::RedisConfig) -> Result<Pool, Box<dyn std::error::Error>> {
+fn create_redis_pool(
+    config: &crate::config::RedisConfig,
+) -> Result<Pool, Box<dyn std::error::Error>> {
     log::info!("Creating Redis connection pool...");
-    
+
     let mut cfg = deadpool_redis::Config::default();
     cfg.connection = None;
     cfg.url = Some(config.url.clone());
-    
+
     cfg.create_pool(Some(deadpool_redis::Runtime::Tokio1))
         .map_err(|e| format!("Failed to create Redis pool: {}", e).into())
 }
