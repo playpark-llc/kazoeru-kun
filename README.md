@@ -101,7 +101,7 @@ sequenceDiagram
     participant MySQL as MySQL
 
     User->>+Frontend: クリックイベント
-    Frontend->>+Backend: クリックデータ送信
+    Frontend->>+Backend: POST /session
     alt CookieにセッションIDが含まれていない場合
       Backend->>Backend: セッションIDを生成
       Backend->>Backend: セッションの期限を生成
