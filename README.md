@@ -90,7 +90,9 @@ localhost:3001
 
 ## シーケンス図
 
-### クリックイベント
+### ユーザ操作系
+
+#### クリックイベント
 
 ```mermaid
 sequenceDiagram
@@ -116,25 +118,6 @@ sequenceDiagram
     Backend->>-Frontend: 処理完了
 
 ```
-
-### クリック数更新 Redis -> MySQL（定期実行）
-
-```mermaid
-sequenceDiagram
-    participant Cron as Cronジョブ
-    participant Backend as バックエンド
-    participant Redis as Redis
-    participant MySQL as MySQL
-
-    Cron->>+Backend: PUT /session
-    Backend->>+Redis: 全セッションのカウント取得
-    Redis-->>-Backend: カウントデータ
-    Backend->>+MySQL: session_counterテーブルをupsert
-    MySQL-->>-Backend: 更新確認
-    Backend-->>-Cron: 同期完了
-```
-
-### 画面表示
 
 #### 総クリック数取得
 
@@ -170,7 +153,26 @@ sequenceDiagram
     Frontend->>User: 現在のステータスと履歴表示
 ```
 
-### 週次ステータス更新（定期実行）
+### Cron Job系（定期実行）
+
+#### クリック数更新 Redis -> MySQL
+
+```mermaid
+sequenceDiagram
+    participant Cron as Cronジョブ
+    participant Backend as バックエンド
+    participant Redis as Redis
+    participant MySQL as MySQL
+
+    Cron->>+Backend: PUT /session
+    Backend->>+Redis: 全セッションのカウント取得
+    Redis-->>-Backend: カウントデータ
+    Backend->>+MySQL: session_counterテーブルをupsert
+    MySQL-->>-Backend: 更新確認
+    Backend-->>-Cron: 同期完了
+```
+
+#### 週次ステータス更新
 
 ```mermaid
 sequenceDiagram
