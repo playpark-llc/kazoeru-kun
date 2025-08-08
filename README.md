@@ -121,16 +121,17 @@ sequenceDiagram
 
 ```mermaid
 sequenceDiagram
-    participant User as ユーザー
-    participant Frontend as フロントエンド
+    participant Cron as Cronジョブ
     participant Backend as バックエンド
     participant Redis as Redis
     participant MySQL as MySQL
 
-    Backend->>+Redis: クリック数カウント取得
+    Cron->>+Backend: PUT /session
+    Backend->>+Redis: 全セッションのカウント取得
     Redis-->>-Backend: カウントデータ
-    Backend->>+MySQL: クリック数更新
+    Backend->>+MySQL: session_counterテーブルをupsert
     MySQL-->>-Backend: 更新確認
+    Backend-->>-Cron: 同期完了
 ```
 
 ### 画面表示
