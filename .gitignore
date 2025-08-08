@@ -12,3 +12,4 @@ app/frontend/yew-app/dist
 app/frontend/yew-app/src/env.rs
 app/frontend/yew-app/static/css/tailwind.css
 *.DS_Store
+SPEC.md
