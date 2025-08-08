@@ -136,19 +136,38 @@ sequenceDiagram
 
 ### 画面表示
 
+#### 総クリック数取得
+
 ```mermaid
 sequenceDiagram
     participant User as ユーザー
     participant Frontend as フロントエンド
     participant Backend as バックエンド
-    participant Redis as Redis
     participant MySQL as MySQL
 
-    Frontend->>+Backend: 総クリック数リクエスト
-    Backend->>+MySQL: 指定期間の総クリック数問い合わせ
+    User->>Frontend: ページアクセス
+    Frontend->>+Backend: GET /count_summary?start_date=&end_date=
+    Backend->>+MySQL: session_counterテーブルから指定期間の合計取得
     MySQL-->>-Backend: 総クリック数
-    Backend->>Frontend: 総クリック数レスポンス
+    Backend-->>-Frontend: 総クリック数レスポンス
     Frontend->>User: 総クリック数表示
+```
+
+#### 最新ステータス取得
+
+```mermaid
+sequenceDiagram
+    participant User as ユーザー
+    participant Frontend as フロントエンド
+    participant Backend as バックエンド
+    participant MySQL as MySQL
+
+    User->>Frontend: ステータス画面アクセス
+    Frontend->>+Backend: GET /status_history?limit=&offset=
+    Backend->>+MySQL: status_historyテーブルから最新ステータスと履歴取得
+    MySQL-->>-Backend: ステータスデータ
+    Backend-->>-Frontend: ステータス履歴レスポンス
+    Frontend->>User: 現在のステータスと履歴表示
 ```
 
 ### 週次ステータス更新（定期実行）
