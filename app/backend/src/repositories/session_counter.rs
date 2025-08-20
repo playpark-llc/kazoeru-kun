@@ -7,7 +7,7 @@ use sea_orm::{
 use std::sync::Arc;
 
 use crate::{
-    models::response::SessionCounterSummary,
+    models::response::SessionCounterSummaryQuery,
     sea_generated::{prelude::SessionCounter, session_counter},
 };
 
@@ -209,13 +209,18 @@ impl SessionCounterRepository for DbSessionCounterRepository {
             .filter(session_counter::Column::UpdatedAt.between(start_date, end_date))
             .select_only()
             .column_as(session_counter::Column::Count.sum(), "sum_count")
-            .into_model::<SessionCounterSummary>()
-            .all(&*self.db)
+            .into_model::<SessionCounterSummaryQuery>()
+            .one(&*self.db)
             .await?;
 
+        // Convert from Option<Decimal> to i64
         let sum = result
-            .first()
-            .and_then(|r| r.sum_count.to_string().parse::<i64>().ok())
+            .and_then(|r| r.sum_count)
+            .map(|decimal| {
+                // Convert Decimal to i64
+                // Decimal can be parsed from its string representation
+                decimal.to_string().parse::<i64>().unwrap_or(0)
+            })
             .unwrap_or(0);
 
         Ok(sum)
@@ -329,5 +334,48 @@ mod tests {
 
         let sum = repo.sum_count_between(start_date, end_date).await.unwrap();
         assert!(sum >= 60);
+    }
+
+    #[tokio::test]
+    async fn test_sum_count_between_with_empty_result() {
+        let db = create_test_db().await;
+        let repo = DbSessionCounterRepository::new(Arc::new(db));
+
+        let now = Local::now();
+        // Query for future dates that won't have any data
+        let start_date = now + chrono::Duration::days(100);
+        let end_date = now + chrono::Duration::days(200);
+
+        let sum = repo.sum_count_between(start_date, end_date).await.unwrap();
+        // Should return 0 when no records are found
+        assert_eq!(sum, 0);
+    }
+
+    #[tokio::test]
+    async fn test_sum_count_between_handles_decimal_conversion() {
+        let db = create_test_db().await;
+        let repo = DbSessionCounterRepository::new(Arc::new(db));
+
+        let now = Local::now();
+        let start_date = now - chrono::Duration::days(1);
+        let end_date = now + chrono::Duration::days(1);
+
+        // Test with larger numbers to ensure DECIMAL conversion works
+        let data = vec![
+            CreateSessionCounter {
+                session_id: "test_large_1".to_string(),
+                count: 999999,
+            },
+            CreateSessionCounter {
+                session_id: "test_large_2".to_string(),
+                count: 1,
+            },
+        ];
+
+        repo.upsert_many(data).await.unwrap();
+
+        let sum = repo.sum_count_between(start_date, end_date).await.unwrap();
+        // Should handle large numbers correctly
+        assert!(sum >= 1000000);
     }
 }
