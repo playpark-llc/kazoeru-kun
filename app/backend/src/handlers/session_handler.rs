@@ -1,8 +1,9 @@
+use crate::http::cookie_utils::set_session_cookie;
 use crate::models::response::{ErrorResponse, Response, SessionCount, SessionCounterSummary};
 use crate::repositories::SessionCounterRepository;
 use crate::services::{SessionService, SyncService};
 use crate::{get_date_range_local, DateRange};
-use rocket::{get, http::{Cookie, CookieJar}, post, put, serde::json::Json, State, time::OffsetDateTime};
+use rocket::{get, http::CookieJar, post, put, serde::json::Json, State};
 use std::sync::Arc;
 
 /// POST /session - セッションのクリックカウンタをインクリメント
@@ -36,19 +37,6 @@ pub async fn create_session(
     }
 }
 
-/// セッションCookieを設定するヘルパー関数
-fn set_session_cookie(
-    cookies: &CookieJar<'_>,
-    session_id: &str,
-    expiration: chrono::DateTime<chrono::Local>,
-) {
-    let offset_expiration = OffsetDateTime::from_unix_timestamp(expiration.timestamp())
-        .expect("Failed to convert timestamp to OffsetDateTime");
-    
-    let mut cookie = Cookie::new("session", session_id.to_string());
-    cookie.set_expires(offset_expiration);
-    cookies.add(cookie);
-}
 
 /// PUT /session - RedisからMySQLへのセッションデータ同期
 #[put("/session")]
