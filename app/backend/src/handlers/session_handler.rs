@@ -2,7 +2,7 @@ use crate::models::response::{ErrorResponse, Response, SessionCount, SessionCoun
 use crate::repositories::SessionCounterRepository;
 use crate::services::{SessionService, SyncService};
 use crate::{get_date_range_local, DateRange};
-use rocket::{get, http::CookieJar, post, put, serde::json::Json, State};
+use rocket::{get, http::{Cookie, CookieJar}, post, put, serde::json::Json, State, time::OffsetDateTime};
 use std::sync::Arc;
 
 /// POST /session - セッションのクリックカウンタをインクリメント
@@ -18,11 +18,9 @@ pub async fn create_session(
 
     match session_service.increment_session(session_id).await {
         Ok(session_response) => {
-            // 新規セッションの場合はクッキーを設定
-            if session_response.is_new {
-                use crate::{create_expiration, create_session_cookie_with_expiration};
-                let expiration = create_expiration();
-                create_session_cookie_with_expiration(cookies, expiration);
+            // 新規セッションの場合はクッキーを設定（サービス層から受け取った情報を使用）
+            if let Some(expiration) = session_response.expiration {
+                set_session_cookie(cookies, &session_response.session_id, expiration);
             }
 
             Ok(Json(Response {
@@ -36,6 +34,20 @@ pub async fn create_session(
             error: format!("Failed to increment session: {e:?}"),
         })),
     }
+}
+
+/// セッションCookieを設定するヘルパー関数
+fn set_session_cookie(
+    cookies: &CookieJar<'_>,
+    session_id: &str,
+    expiration: chrono::DateTime<chrono::Local>,
+) {
+    let offset_expiration = OffsetDateTime::from_unix_timestamp(expiration.timestamp())
+        .expect("Failed to convert timestamp to OffsetDateTime");
+    
+    let mut cookie = Cookie::new("session", session_id.to_string());
+    cookie.set_expires(offset_expiration);
+    cookies.add(cookie);
 }
 
 /// PUT /session - RedisからMySQLへのセッションデータ同期
