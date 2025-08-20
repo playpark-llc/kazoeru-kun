@@ -39,17 +39,13 @@ localhost:3001
        - 指定期間のカウント合計を返す
        - パラメータ省略時はデフォルト期間を使用
     
-    4. `GET /count_summary?start_date=yyyy-mm-dd&end_date=yyyy-mm-dd`
-       - 後方互換性のためのエンドポイント
-       - `/session_counter`と同じ機能
-    
     ### ステータス履歴関連
-    5. `PUT /status_history`
+    4. `PUT /status_history`
        - ステータス履歴の更新（週次ステータス計算）
        - 先週のクリック数を集計し、目標値と比較してステータスを決定
        - status_historyテーブルに新規レコードを追加
     
-    6. `GET /status_history?limit=<n>&offset=<n>&start_date=yyyy-mm-dd&end_date=yyyy-mm-dd`
+    5. `GET /status_history?limit=<n>&offset=<n>&start_date=yyyy-mm-dd&end_date=yyyy-mm-dd`
        - ステータス履歴の取得（ページネーション対応）
        - 現在のステータスと履歴を返す
        - limit: 取得件数上限（デフォルト: 100）
@@ -57,21 +53,21 @@ localhost:3001
        - 日付範囲指定可能
     
     ### ヘルスチェック
-    7. `GET /health`
+    6. `GET /health`
        - システム全体のヘルスチェック
        - MySQL、Redisの接続状態とレイテンシを返す
     
-    8. `GET /health/liveness`
+    7. `GET /health/liveness`
        - Kubernetesライブネスプローブ用
        - アプリケーションの生存確認
     
-    9. `GET /health/readiness`
+    8. `GET /health/readiness`
        - Kubernetes準備状態プローブ用
        - サービス提供可能状態の確認
 - front
   - フロンエンド (ポート: 3001)
   - Rust/YewフレームワークによるWebAssemblyアプリケーション
-  - 初回読み込み: `GET /count_summary`を呼び出して総クリック数を表示
+  - 初回読み込み: `GET /session_counter`を呼び出して総クリック数を表示
   - クリック時: `POST /session`を呼び出してカウントを更新
 - redis (ポート: 6380)
   - セッションベースのクリックカウンタキャッシュ
@@ -129,7 +125,7 @@ sequenceDiagram
     participant MySQL as MySQL
 
     User->>Frontend: ページアクセス
-    Frontend->>+Backend: GET /count_summary?start_date=&end_date=
+    Frontend->>+Backend: GET /session_counter?start_date=&end_date=
     Backend->>+MySQL: session_counterテーブルから指定期間の合計取得
     MySQL-->>-Backend: 総クリック数
     Backend-->>-Frontend: 総クリック数レスポンス

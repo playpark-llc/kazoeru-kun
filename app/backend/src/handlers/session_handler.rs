@@ -69,14 +69,6 @@ pub async fn get_session_counter(
     get_session_counter_impl(counter_repo, date_range).await
 }
 
-/// GET /count_summary - 後方互換性のためのエンドポイント
-#[get("/count_summary?<date_range..>")]
-pub async fn get_count_summary(
-    counter_repo: &State<Arc<dyn SessionCounterRepository>>,
-    date_range: Option<DateRange>,
-) -> Result<Json<Response<SessionCounterSummary>>, Json<ErrorResponse>> {
-    get_session_counter_impl(counter_repo, date_range).await
-}
 
 // 共通実装
 async fn get_session_counter_impl(

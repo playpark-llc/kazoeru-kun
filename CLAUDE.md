@@ -23,12 +23,12 @@ The system consists of 5 Docker services:
 ### Data Flow
 1. User clicks → Frontend calls `POST /session` → Redis increments counter
 2. Cron job (every minute) → Calls `PUT /session` → Syncs Redis to MySQL
-3. Frontend loads → Calls `GET /count_summary` → Displays total from MySQL
+3. Frontend loads → Calls `GET /session_counter` → Displays total from MySQL
 
 ### API Endpoints
 - `POST /session`: Increment click count for session (Redis)
 - `PUT /session`: Sync Redis counts to MySQL (called by cron)
-- `GET /count_summary?start_date=yyyy-mm-dd&end_date=yyyy-mm-dd`: Get aggregated counts
+- `GET /session_counter?start_date=yyyy-mm-dd&end_date=yyyy-mm-dd`: Get aggregated counts
 
 ## Development Commands
 
