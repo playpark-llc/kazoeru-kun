@@ -174,4 +174,38 @@ mod tests {
         // This test confirms that sum_count is an i64, which will serialize as a JSON number
         assert_eq!(response.result.sum_count, 56);
     }
+
+    #[test]
+    fn test_session_counter_summary_with_zero() {
+        // Test that SessionCounterSummary handles zero values correctly
+        let summary = SessionCounterSummary {
+            sum_count: 0,
+        };
+        
+        assert_eq!(summary.sum_count, 0i64);
+        
+        let response = Response {
+            message: "指定期間のクリック数を取得しました".to_string(),
+            result: summary,
+        };
+        
+        assert_eq!(response.result.sum_count, 0);
+    }
+
+    #[test]
+    fn test_session_counter_summary_with_large_numbers() {
+        // Test that SessionCounterSummary handles large numbers correctly
+        let summary = SessionCounterSummary {
+            sum_count: 9_999_999_999,
+        };
+        
+        assert_eq!(summary.sum_count, 9_999_999_999i64);
+        
+        let response = Response {
+            message: "指定期間のクリック数を取得しました".to_string(),
+            result: summary,
+        };
+        
+        assert_eq!(response.result.sum_count, 9_999_999_999);
+    }
 }

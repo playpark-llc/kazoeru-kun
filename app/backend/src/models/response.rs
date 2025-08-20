@@ -25,7 +25,13 @@ pub struct SessionCount {
 }
 
 /// Session counter summary from database aggregation
-#[derive(FromQueryResult, Debug, Serialize, Clone)]
+#[derive(FromQueryResult, Debug, Clone)]
+pub struct SessionCounterSummaryQuery {
+    pub sum_count: Option<Decimal>,
+}
+
+/// Session counter summary for API response
+#[derive(Debug, Serialize, Clone)]
 #[serde(crate = "rocket::serde")]
 pub struct SessionCounterSummary {
     pub sum_count: i64,
