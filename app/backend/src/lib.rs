@@ -1,6 +1,7 @@
 pub mod config;
 pub mod di;
 pub mod handlers;
+pub mod http;
 pub mod models;
 pub mod repositories;
 pub mod routes;
@@ -9,13 +10,7 @@ pub mod services;
 
 use chrono::{DateTime, Datelike, Days, DurationRound, Local, NaiveDate, TimeDelta};
 use deadpool_redis::{Connection, Pool};
-use rand::{distributions::Alphanumeric, thread_rng, Rng};
-use rocket::{
-    form::FromForm,
-    http::{Cookie, CookieJar},
-    time::OffsetDateTime,
-    State,
-};
+use rocket::{form::FromForm, State};
 use sea_orm::sqlx::types::chrono::TimeZone;
 
 #[derive(FromForm)]
@@ -36,49 +31,6 @@ pub async fn get_redis_connection(redis_pool: &State<Pool>) -> Result<Connection
         .map_err(|e| format!("Failed to get redis connection: {e:?}"))
 }
 
-// ランダムなセッションIDを生成する関数
-fn generate_session_id() -> String {
-    thread_rng()
-        .sample_iter(&Alphanumeric)
-        .take(30) // 30文字のランダムな文字列を生成
-        .map(char::from)
-        .collect()
-}
-
-// cookieの有効期限を取得
-pub fn create_expiration() -> chrono::DateTime<Local> {
-    // 現在の日付を取得
-    let now = Local::now();
-
-    // 今日の23:59:59を設定
-    Local
-        .with_ymd_and_hms(now.year(), now.month(), now.day() + 1, 0, 0, 0)
-        .single()
-        .expect("Failed to create expiration date time. The date should be valid.")
-}
-
-// 期限付きのsession_idをCookieに設定
-pub fn create_session_cookie_with_expiration(
-    cookies: &CookieJar<'_>,
-    expiration: chrono::DateTime<Local>,
-) -> String {
-    let session_id = generate_session_id();
-
-    // chronoのDateTimeをtime::OffsetDateTimeに変換
-    let offset_expiration = OffsetDateTime::from_unix_timestamp(expiration.timestamp())
-        .expect("Failed to convert timestamp to OffsetDateTime. The timestamp should be valid.");
-
-    // Cookieを作成し、有効期限を設定
-    let mut cookie = Cookie::new("session", session_id.clone());
-    cookie.set_expires(offset_expiration);
-
-    log::debug!("cookie value: {:?}", cookie.value());
-    log::debug!("cookie expires:{:?}", cookie.expires());
-
-    cookies.add(cookie);
-
-    session_id
-}
 
 // date_rangeがNoneのときのデフォルト値を設定
 pub fn get_date_range_local(date_range: Option<DateRange>) -> DateRangeLocal {

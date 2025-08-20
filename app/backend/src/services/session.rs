@@ -10,6 +10,7 @@ pub struct SessionResponse {
     pub count: u32,
     pub message: String,
     pub is_new: bool,
+    pub expiration: Option<chrono::DateTime<Local>>,  // Cookie設定用の有効期限
 }
 
 pub struct SessionService {
@@ -47,14 +48,14 @@ impl SessionService {
         let count = self.session_repo.increment(&session_id).await?;
 
         // 新規セッション（カウント1）の場合は有効期限を設定
-        let (message, is_new) = if count == 1 {
+        let (message, is_new, expiration) = if count == 1 {
             let expiration = self.calculate_expiration();
             self.session_repo
                 .set_expiration(&session_id, expiration.timestamp())
                 .await?;
-            ("新規セッションが登録されました".to_string(), true)
+            ("新規セッションが登録されました".to_string(), true, Some(expiration))
         } else {
-            ("セッションカウントが更新されました".to_string(), false)
+            ("セッションカウントが更新されました".to_string(), false, None)
         };
 
         Ok(SessionResponse {
@@ -62,6 +63,7 @@ impl SessionService {
             count,
             message,
             is_new,
+            expiration,
         })
     }
 
@@ -190,6 +192,7 @@ mod tests {
         assert!(response.is_new);
         assert!(!response.session_id.is_empty());
         assert_eq!(response.message, "新規セッションが登録されました");
+        assert!(response.expiration.is_some());
     }
 
     #[tokio::test]
@@ -208,6 +211,7 @@ mod tests {
         assert_eq!(response2.count, 2);
         assert!(!response2.is_new);
         assert_eq!(response2.message, "セッションカウントが更新されました");
+        assert!(response2.expiration.is_none());
     }
 
     #[tokio::test]
@@ -224,6 +228,7 @@ mod tests {
         assert_ne!(response.session_id, "nonexistent");
         assert_eq!(response.count, 1);
         assert!(response.is_new);
+        assert!(response.expiration.is_some());
     }
 
     #[tokio::test]

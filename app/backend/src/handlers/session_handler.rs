@@ -1,3 +1,4 @@
+use crate::http::cookie_utils::set_session_cookie;
 use crate::models::response::{ErrorResponse, Response, SessionCount, SessionCounterSummary};
 use crate::repositories::SessionCounterRepository;
 use crate::services::{SessionService, SyncService};
@@ -18,11 +19,9 @@ pub async fn create_session(
 
     match session_service.increment_session(session_id).await {
         Ok(session_response) => {
-            // 新規セッションの場合はクッキーを設定
-            if session_response.is_new {
-                use crate::{create_expiration, create_session_cookie_with_expiration};
-                let expiration = create_expiration();
-                create_session_cookie_with_expiration(cookies, expiration);
+            // 新規セッションの場合はクッキーを設定（サービス層から受け取った情報を使用）
+            if let Some(expiration) = session_response.expiration {
+                set_session_cookie(cookies, &session_response.session_id, expiration);
             }
 
             Ok(Json(Response {
@@ -37,6 +36,7 @@ pub async fn create_session(
         })),
     }
 }
+
 
 /// PUT /session - RedisからMySQLへのセッションデータ同期
 #[put("/session")]
