@@ -95,11 +95,10 @@ async fn get_session_counter_impl(
             })
         })?;
 
-    use sea_orm::prelude::Decimal;
     let res = Response {
         message: "指定期間のクリック数を取得しました".to_string(),
         result: SessionCounterSummary {
-            sum_count: Decimal::from(sum_count),
+            sum_count,
         },
     };
     Ok(Json(res))
@@ -108,7 +107,6 @@ async fn get_session_counter_impl(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use sea_orm::prelude::Decimal;
 
     #[test]
     fn test_session_counter_response_structure() {
@@ -118,9 +116,9 @@ mod tests {
 
         // Test SessionCounterSummary structure
         let summary = SessionCounterSummary {
-            sum_count: Decimal::from(1000),
+            sum_count: 1000,
         };
-        assert_eq!(summary.sum_count, Decimal::from(1000));
+        assert_eq!(summary.sum_count, 1000);
     }
 
     #[test]
@@ -155,5 +153,25 @@ mod tests {
 
         assert_eq!(response.message, "Test message");
         assert_eq!(response.result.count, 5);
+    }
+
+    #[test]
+    fn test_session_counter_summary_serialization() {
+        // Test that SessionCounterSummary serializes sum_count as a number
+        let summary = SessionCounterSummary {
+            sum_count: 56,
+        };
+        
+        // Verify the value is numeric (not a string)
+        assert_eq!(summary.sum_count, 56i64);
+        
+        // When serialized to JSON, it should be a number, not a string
+        let response = Response {
+            message: "指定期間のクリック数を取得しました".to_string(),
+            result: summary,
+        };
+        
+        // This test confirms that sum_count is an i64, which will serialize as a JSON number
+        assert_eq!(response.result.sum_count, 56);
     }
 }

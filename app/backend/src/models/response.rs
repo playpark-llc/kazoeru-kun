@@ -28,7 +28,7 @@ pub struct SessionCount {
 #[derive(FromQueryResult, Debug, Serialize, Clone)]
 #[serde(crate = "rocket::serde")]
 pub struct SessionCounterSummary {
-    pub sum_count: Decimal,
+    pub sum_count: i64,
 }
 
 /// Status history record
