@@ -154,6 +154,34 @@ impl StatusService {
         })
     }
 
+    /// 初期化が必要かチェック
+    pub async fn needs_initialization(&self) -> Result<bool, RepositoryError> {
+        let latest = self.status_history_repo.get_latest().await?;
+        Ok(latest.is_none())
+    }
+
+    /// デフォルトレコードで初期化
+    pub async fn initialize_with_default(&self) -> Result<(), RepositoryError> {
+        // 本日の日付で初期レコードを作成
+        let today = Local::now().date_naive();
+        
+        let initial_record = CreateStatusHistory {
+            start_date: today,
+            end_date: today,
+            count: Decimal::from(0),
+            status: Status::Clean,
+        };
+
+        self.status_history_repo.create(initial_record).await?;
+        
+        log::info!(
+            "Initialized status_history with default record (date: {}, status: Clean)",
+            today
+        );
+        
+        Ok(())
+    }
+
     /// 現在のステータスを取得
     pub async fn get_current_status(&self) -> Result<Option<Status>, RepositoryError> {
         let status_data = self.status_history_repo.get_latest().await?;
@@ -392,6 +420,35 @@ mod tests {
         async fn delete_by_session_id(&self, _session_id: &str) -> Result<(), RepositoryError> {
             unimplemented!()
         }
+    }
+
+    #[tokio::test]
+    async fn test_needs_initialization_empty_table() {
+        let status_repo = Arc::new(MockStatusHistoryRepository::new());
+        let counter_repo = Arc::new(MockSessionCounterRepository::new());
+        let service = StatusService::new(status_repo.clone(), counter_repo);
+
+        // 空のテーブルの場合、初期化が必要
+        let needs_init = service.needs_initialization().await.unwrap();
+        assert!(needs_init);
+    }
+
+    #[tokio::test]
+    async fn test_initialize_with_default() {
+        let status_repo = Arc::new(MockStatusHistoryRepository::new());
+        let counter_repo = Arc::new(MockSessionCounterRepository::new());
+        let service = StatusService::new(status_repo.clone(), counter_repo);
+
+        // 初期化を実行
+        service.initialize_with_default().await.unwrap();
+
+        // 初期化後は初期化不要になる
+        let needs_init = service.needs_initialization().await.unwrap();
+        assert!(!needs_init);
+
+        // 現在のステータスがCleanになっている
+        let current_status = service.get_current_status().await.unwrap();
+        assert_eq!(current_status, Some(Status::Clean));
     }
 
     #[tokio::test]
