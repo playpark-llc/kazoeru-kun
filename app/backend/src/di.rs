@@ -59,6 +59,9 @@ impl DiContainer {
         ));
         let health_service = Arc::new(HealthService::new(db.clone(), redis_pool.clone()));
 
+        // status_historyテーブルの初期化チェック
+        Self::ensure_status_history_initialized(&status_service).await?;
+
         Ok(Self {
             config,
             db,
@@ -71,6 +74,19 @@ impl DiContainer {
             sync_service,
             health_service,
         })
+    }
+
+    /// status_historyテーブルが空の場合、デフォルトレコードで初期化
+    async fn ensure_status_history_initialized(
+        status_service: &Arc<StatusService>,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        if status_service.needs_initialization().await? {
+            status_service.initialize_with_default().await?;
+            log::info!("status_historyテーブルをデフォルトレコードで初期化しました");
+        } else {
+            log::debug!("status_historyテーブルは既に初期化されています");
+        }
+        Ok(())
     }
 
     /// CORS設定を取得
