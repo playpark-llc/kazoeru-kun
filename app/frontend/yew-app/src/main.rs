@@ -1,5 +1,6 @@
 mod app;
 mod components;
+mod models;
 mod router;
 mod env;
 use app::App;
