@@ -1,4 +1,4 @@
-use crate::components::{home::Home, member::member_list::MemberList,detail::Detail,push_after::PushAfter};
+use crate::components::{home::Home, member::member_list::MemberList, detail::Detail, push_after::PushAfter};
 use yew::prelude::*;
 use yew_router::prelude::*;
 
