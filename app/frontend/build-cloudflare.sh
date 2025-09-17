@@ -20,8 +20,11 @@ cd app/frontend/yew-app
 # Install Node dependencies
 npm install
 
-# Build Tailwind CSS
-npm run prod:css
+# Create static/css directory if it doesn't exist
+mkdir -p static/css
+
+# Build Tailwind CSS to the correct location
+tailwindcss -c tailwind.config.js -o ./static/css/tailwind.css --minify
 
 # Build Yew app
 trunk build --release
