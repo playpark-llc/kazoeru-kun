@@ -1,45 +1,41 @@
 use yew::prelude::*;
 use wasm_bindgen_futures::spawn_local;
-use crate::env;
+use gloo::console::error;
+
 use crate::models::status::Status;
-use gloo_net::http::Request;
-use serde_json::Value;
+use crate::api_client::ApiClient;
 
 #[function_component]
 pub fn PushAfter() -> Html {
-    let status_state = use_state(|| Status::Clean); // 初期値は適宜
+    let status_state = use_state(|| Status::Clean);
+    // ステータス履歴の取得
     {
         let status_state = status_state.clone();
         use_effect_with((), move |_| {
             spawn_local(async move {
-                if let Ok(resp) = Request::get(&format!("{}/{}", env::APP_API_ROOT, "status_history"))
-                    .send()
-                    .await
-                {
-                    // 1) JSONとしてパースして、場所に応じて取り出す
-                    if let Ok(json) = resp.json::<Value>().await {
-                        let s = json.get("result")
-                            .and_then(|r| r.get("current_status"))
-                            .and_then(|cs| cs.get("status"))
-                            .and_then(|v| v.as_str())
-                            .unwrap_or("CLEAN");
-
-                        let mut status = Status::from(s);
-
+                match ApiClient::get_status_history().await {
+                    Ok(status_str) => {
+                        let status = Status::from(status_str.as_str());
                         status_state.set(status);
+                    }
+                    Err(e) => {
+                        error!("Failed to get status history: {}", e.to_string());
                     }
                 }
             });
             || ()
         });
     }
+
     let push = {
         move |_| {
             spawn_local(async move {
-                Request::post(&format!("{}/{}", env::APP_API_ROOT, "session"))
-                    // .credentials(web_sys::RequestCredentials::Include)
-                    .send()
-                    .await;
+                match ApiClient::send_session().await {
+                    Ok(_) => {}
+                    Err(e) => {
+                        error!("Failed to send session: {}", e.to_string());
+                    }
+                }
             });
         }
     };
@@ -53,7 +49,7 @@ pub fn PushAfter() -> Html {
                         <img src="/images/main-text.svg" class="w-full"/>
                     </div>
                     <a class="w-48 hover:-translate-y-1 cursor-pointer" onclick={ push }>
-                        <img src="/images/status/dirty.png" />
+                        <img src={ status_state.image_url() } />
                     </a>
                 </div>
             </div>

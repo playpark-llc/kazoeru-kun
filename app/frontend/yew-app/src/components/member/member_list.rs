@@ -34,17 +34,17 @@ pub fn MemberList() -> Html {
         },
     ];
     html! {
-        <div class="min-h-screen bg-pink-200 font-DotGothic">
+        <div class="min-h-screen bg-pink-200 w-screen font-DotGothic">
             <div class="flex justify-end p-4">
                 <span class="text-white text-lg">{"MENU"}</span>
             </div>
 
             <div class="bg-blue-300 h-64 flex items-center justify-center">
-                <span class="text-white text-xl">{"ここに画像が入ります"}</span>
+                <img class="p-10" src="/images/main-logo.svg" alt="" />
             </div>
 
-            <section class="bg-primary-check p-8">
-                <div class="p-8">
+            <section class="bg-primary-check py-8 md:pl-8 xl:pr-8 w-full">
+                <div class="py-8 px-4 md:px-8">
                     <div class="mb-8">
                         <img src="/images/about.svg" />
                     </div>
@@ -78,13 +78,13 @@ pub fn MemberList() -> Html {
                     </div>
                 </div>
 
-                <div class="p-8">
+                <div class="py-8 pl-4 md:pl-8 xl:pr-8">
                     <div class="mb-8">
                         <img src="/images/member.svg" />
                     </div>
-                    <div class="w-full flex justify-center gap-8">
+                    <div class="overflow-x-scroll md:w-full flex xl:justify-center gap-8 overflow-y-hidden pb-4">
                         {member_items.iter().map(|member| html! {
-                            <div class="flex flex-col gap-2">
+                            <div class="flex flex-col gap-2 min-w-[262px]">
                                 <MemberCard member={member.clone()} />
                                 <p class="text-center mt-2 text-[#6184C6]">{member.name.clone()}</p>
                                 <p class="text-center text-xs text-[#6184C6]">{member.role.clone()}</p>
@@ -94,7 +94,7 @@ pub fn MemberList() -> Html {
                 </div>
             </section>
 
-            <footer class="bg-pink-200 p-4 text-center">
+            <footer class="bg-pink-200 p-4 text-center text-white">
                 <span>{"@yayoyoroz"}</span>
             </footer>
         </div>

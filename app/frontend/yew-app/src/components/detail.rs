@@ -1,61 +1,64 @@
 use yew::prelude::*;
 use wasm_bindgen_futures::spawn_local;
-use crate::env;
-use serde::{Deserialize, Serialize};
+use gloo::console::error;
 
-#[derive(Deserialize, Debug)]
-struct ApiResponse {
-    message: String,
-    result: ResultData,
-}
-#[derive(Deserialize, Debug)]
-struct ResultData {
-    sum_count: String,
-    // sum_count: 0u32,
-}
+use crate::models::status::Status;
+use crate::api_client::ApiClient;
 
 #[function_component]
 pub fn Detail() -> Html {
-    let target_count = use_state(|| 100_000u32);
     // 状態を定義
     let count = use_state(|| 0u32);
     {
         let count = count.clone();
         use_effect_with((), move |_| {
             spawn_local(async move {
-                let client = reqwest::Client::new();
-                let _req = client
-                    .get(format!("{}/{}", env::APP_API_ROOT, "session_counter?start_date=2025-08-19&end_date=2025-08-21"))
-                    .send()
-                    .await
-                    .expect("failed to send request");
-                let _data: ApiResponse = _req.json().await.expect("failed to parse JSON");
-
-                // 状態を更新
-                count.set(_data.result.sum_count.parse().unwrap());
+                match ApiClient::get_count_history().await {
+                    Ok(count_data) => {
+                        count.set(count_data);
+                    }
+                    Err(e) => {
+                        error!("Failed to get status history: {}", e.to_string());
+                    }
+                }
             });
-            || ();
+            || ()
+        });
+    }
 
+    let status_state = use_state(|| Status::Clean);
+    // ステータス履歴の取得
+    {
+        let status_state = status_state.clone();
+        use_effect_with((), move |_| {
             spawn_local(async move {
-                let client = reqwest::Client::new();
-                let _req = client
-                    .get(format!("{}/{}", env::APP_API_ROOT, "status_history"))
-                    .send()
-                    .await
-                    .expect("failed to send request");
+                match ApiClient::get_status_history().await {
+                    Ok(status_str) => {
+                        let status = Status::from(status_str.as_str());
+                        status_state.set(status);
+                    }
+                    Err(e) => {
+                        error!("Failed to get status history: {}", e.to_string());
+                    }
+                }
             });
             || ()
         });
     }
 
     let push = {
+        let count = count.clone();
         move |_| {
+            let count = count.clone();
             spawn_local(async move {
-                let client = reqwest::Client::new();
-                client.post(format!("{}/{}", env::APP_API_ROOT, "session"))
-                    .send()
-                    .await
-                    .expect("failed to send request");
+                match ApiClient::send_session().await {
+                    Ok(_) => {
+                        count.set(*count + 1);
+                    }
+                    Err(e) => {
+                        error!("Failed to send session: {}", e.to_string());
+                    }
+                }
             });
         }
     };
@@ -154,7 +157,7 @@ pub fn Detail() -> Html {
                                 <img src="/images/main-text.svg" class="w-full"/>
                             </div>
                             <a class="w-48 hover:-translate-y-1 cursor-pointer" onclick={ push }>
-                                <img src="/images/status/dirty.png" />
+                                <img src={ status_state.image_url() } />
                             </a>
                         </div>
                         <div class="m-4 w-2/3 text-center relative z-10 aspect-square">
@@ -173,7 +176,7 @@ pub fn Detail() -> Html {
                                 <div class="text-center text-2xl">
                                     <p>{"目標まであと"}</p>
                                     <p class="font-bold text-[28px]">
-                                        <span class="text-[#6184C6] tracking-widest">{ *target_count - *count }</span>
+                                        <span class="text-[#6184C6] tracking-widest">{ status_state.current_target() - *count }</span>
                                         <span class="text-xl">{"つんつん！"}</span>
                                     </p>
                                 </div>
