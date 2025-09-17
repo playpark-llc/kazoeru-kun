@@ -1,26 +1,43 @@
-# Default to development Dockerfile
-# For production, use Dockerfile.prod
+# ======================================
+# Development Dockerfile with hot reload
+# ======================================
 FROM rust:1.83.0-slim-bullseye
 
-RUN apt-get -y update && \
-  apt-get -y --no-install-recommends install pkg-config libssl-dev && \
-  cargo install --locked sea-orm-cli@1.1.0 && \
-  cargo install cargo-watch cargo-make && \
-  rustup component add rustfmt && \
-  rm -rf /var/lib/apt/lists/
+# Install build dependencies and development tools
+RUN apt-get update && \
+    apt-get install -y \
+    pkg-config \
+    libssl-dev \
+    git \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
 
+# Install development tools
+RUN cargo install cargo-watch cargo-make && \
+    cargo install --locked sea-orm-cli --version 1.1.0 && \
+    rustup component add rustfmt clippy
+
+# Set working directory
 WORKDIR /opt/app/backend
 
+# Copy dependency files
 COPY Cargo.toml Cargo.lock ./
 COPY rust-toolchain.toml ./
+
+# Pre-build dependencies for faster development
+RUN mkdir src && \
+    echo "fn main() {}" > src/main.rs && \
+    cargo build && \
+    rm -rf src
+
+# Copy source code
 COPY src ./src
-RUN cargo fetch
+COPY migration ./migration
+COPY .env ./
+COPY entrypoint.sh /entrypoint.sh
 
-COPY .env .
-COPY migration  ./migration
-COPY entrypoint.sh /
+# Make entrypoint executable
+RUN chmod +x /entrypoint.sh
 
-RUN cargo build && \
-  chmod u+x /entrypoint.sh
-
-CMD ["/bin/sh","-c","/entrypoint.sh"]
+# Development command with hot reload
+CMD ["cargo", "watch", "-x", "run"]
