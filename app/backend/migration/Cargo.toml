@@ -12,5 +12,5 @@ path = "src/lib.rs"
 async-std = { version = "1", features = ["attributes", "tokio1"] }
 
 [dependencies.sea-orm-migration]
-version = "1.0.0-rc.5"
+version = "1.1.0"
 features = ["sqlx-mysql", "runtime-tokio-native-tls"]

@@ -8,10 +8,9 @@ pub mod routes;
 pub mod sea_generated;
 pub mod services;
 
-use chrono::{DateTime, Datelike, Days, DurationRound, Local, NaiveDate, TimeDelta};
+use chrono::{DateTime, Datelike, Days, DurationRound, Local, NaiveDate, TimeDelta, TimeZone};
 use deadpool_redis::{Connection, Pool};
 use rocket::{form::FromForm, State};
-use sea_orm::sqlx::types::chrono::TimeZone;
 
 #[derive(FromForm)]
 pub struct DateRange {
