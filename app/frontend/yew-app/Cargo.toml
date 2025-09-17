@@ -11,10 +11,17 @@ yew = { version = "0.21.0", features = ["csr"] }
 yew-router = "0.18.0"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-web-sys = { version = "0.3", features = ["console", "Element"] }
+web-sys = { version = "0.3", features = [
+    "console",
+    "Document", 
+    "HtmlDocument",
+    "Window",
+    "Element"
+] }
+chrono = "0.4"
 wasm-bindgen = "0.2"
 wasm-bindgen-futures = "0.4"
-reqwest = { version = "0.12", features = ["json"] }
+gloo = "0.10"
 gloo-worker = { version = "0.3", features = ["futures"] }
 gloo-net = { version = "0.5", features = ["http", "json"] }
 

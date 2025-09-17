@@ -72,6 +72,7 @@ impl AppConfig {
         let exact = &self.cors.allowed_origins;
         rocket_cors::CorsOptions::default()
             .allowed_origins(AllowedOrigins::some_exact(exact))
+            .allow_credentials(true)
             .to_cors()
     }
 }
