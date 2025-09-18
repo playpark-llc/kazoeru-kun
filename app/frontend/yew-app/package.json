@@ -7,7 +7,7 @@
     "dev:css": "tailwindcss -i ./static/css/app.css -o ./static/css/tailwind.css --watch",
     "dev:serve": "cargo clean && trunk serve --address 0.0.0.0",
     "prod": "npm run prod:css && trunk build --release",
-    "prod:css": "tailwindcss -c tailwind.config.js -o tailwind.css --minify",
+    "prod:css": "mkdir -p ./static/css && tailwindcss -c tailwind.config.js -o ./static/css/tailwind.css --minify",
     "deploy": "npx wrangler pages deploy",
     "build:deploy": "npm run prod && npm run deploy",
     "build:cloudflare": "curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y && . \"$HOME/.cargo/env\" && rustup target add wasm32-unknown-unknown && cargo install trunk --locked && npm run prod",
