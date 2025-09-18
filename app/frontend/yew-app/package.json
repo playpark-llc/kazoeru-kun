@@ -10,6 +10,7 @@
     "prod:css": "tailwindcss -c tailwind.config.js -o tailwind.css --minify",
     "deploy": "npx wrangler pages deploy",
     "build:deploy": "npm run prod && npm run deploy",
-    "build:cloudflare": "cargo install trunk --locked && npm run prod"
+    "build:cloudflare": "curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y && . \"$HOME/.cargo/env\" && rustup target add wasm32-unknown-unknown && cargo install trunk --locked && npm run prod",
+    "build:local": "cargo install trunk --locked && npm run prod"
   }
 }
