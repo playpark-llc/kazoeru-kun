@@ -9,6 +9,7 @@
     "prod": "npm run prod:css && trunk build --release",
     "prod:css": "tailwindcss -c tailwind.config.js -o tailwind.css --minify",
     "deploy": "npx wrangler pages deploy",
-    "build:deploy": "npm run prod && npm run deploy"
+    "build:deploy": "npm run prod && npm run deploy",
+    "build:cloudflare": "cargo install trunk --locked && npm run prod"
   }
 }
