@@ -23,8 +23,8 @@ npm install
 # Create static/css directory if it doesn't exist
 mkdir -p static/css
 
-# Build Tailwind CSS to the correct location
-tailwindcss -c tailwind.config.js -o ./static/css/tailwind.css --minify
+# Build Tailwind CSS to the correct location using npx
+npx tailwindcss -c tailwind.config.js -o ./static/css/tailwind.css --minify
 
 # Build Yew app
 trunk build --release
