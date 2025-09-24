@@ -1,3 +1,10 @@
 #!/bin/sh
 # Production entrypoint script
-exec /app/backend
+
+# Signal handling for graceful shutdown
+trap 'kill -TERM $PID' TERM INT
+
+# Start application
+/app/backend &
+PID=$!
+wait $PID
