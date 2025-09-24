@@ -1,7 +1,7 @@
 # ドキュメントの出力先
 docPath: doc/KazoeruKun
 # 対象のDBのDSN
-dsn: mysql://root:admin_password@db/KazoeruKun
+dsn: postgresql://postgres:admin_password@db/KazoeruKun
 # 除外テーブル
 exclude:
   - seaql_migrations

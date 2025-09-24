@@ -247,7 +247,9 @@ mod tests {
     use sea_orm::Database;
 
     async fn create_test_db() -> DatabaseConnection {
-        Database::connect("mysql://user:password@localhost/test_db")
+        let test_database_url = std::env::var("TEST_DATABASE_URL")
+            .unwrap_or_else(|_| "postgresql://postgres:test@localhost/test_db".to_string());
+        Database::connect(test_database_url)
             .await
             .unwrap()
     }
