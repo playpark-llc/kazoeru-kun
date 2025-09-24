@@ -7,7 +7,7 @@ use crate::models::domain::{apply_rank_change, calculate_rank_change, get_last_w
 use crate::repositories::{
     CreateStatusHistory, RepositoryError, SessionCounterRepository, StatusHistoryRepository,
 };
-use crate::sea_generated::sea_orm_active_enums::Status;
+use crate::sea_generated::sea_orm_active_enums::StatusEnum as Status;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StatusUpdateResult {

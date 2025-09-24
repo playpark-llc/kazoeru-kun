@@ -63,8 +63,8 @@ impl DbSessionCounterRepository {
             id: entity.id,
             session_id: entity.session_id,
             count: entity.count,
-            created_at: Local.from_utc_datetime(&entity.created_at.naive_utc()),
-            updated_at: Local.from_utc_datetime(&entity.updated_at.naive_utc()),
+            created_at: Local.from_utc_datetime(&entity.created_at.and_utc().naive_utc()),
+            updated_at: Local.from_utc_datetime(&entity.updated_at.and_utc().naive_utc()),
         }
     }
 }
