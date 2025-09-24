@@ -14,20 +14,25 @@ Kazoeru-kun (カウントくん) is a click counter application with a Rust-base
 
 ### Service Architecture
 The system consists of 4 Docker services:
-1. **backend** (`back`): Rocket API server handling click counting, data persistence, and scheduled tasks
-2. **frontend**: Yew WebAssembly application served via Trunk
+1. **backend** (`back`): Rocket API server with integrated cron jobs for scheduled tasks
+2. **frontend** (`front`): Yew WebAssembly application served via Trunk
 3. **redis**: Session-based click counter cache with TTL
-4. **postgres** (`db`): Persistent storage for aggregated counts
+4. **postgres** (`db`): Persistent storage for aggregated counts (PostgreSQL 16 Alpine)
 
 ### Data Flow
 1. User clicks → Frontend calls `POST /session` → Redis increments counter
-2. Backend cron job (every minute via tokio::spawn) → Syncs Redis to PostgreSQL
+2. Backend internal cron job (every 60 seconds via tokio::spawn) → Syncs Redis to PostgreSQL
 3. Frontend loads → Calls `GET /session_counter` → Displays total from PostgreSQL
 
 ### API Endpoints
 - `POST /session`: Increment click count for session (Redis)
 - `PUT /session`: Sync Redis counts to PostgreSQL (called by internal cron job)
 - `GET /session_counter?start_date=yyyy-mm-dd&end_date=yyyy-mm-dd`: Get aggregated counts
+- `PUT /status_history`: Update weekly status history (called by internal cron job)
+- `GET /status_history?limit=<n>&offset=<n>&start_date=yyyy-mm-dd&end_date=yyyy-mm-dd`: Get status history
+- `GET /health`: System health check (PostgreSQL and Redis connectivity)
+- `GET /health/liveness`: Kubernetes liveness probe
+- `GET /health/readiness`: Kubernetes readiness probe
 
 ## Development Commands
 
@@ -39,7 +44,7 @@ docker compose up -d
 # Access application
 # Frontend: http://localhost:3001
 # Backend API: http://localhost:8881
-# PostgreSQL: localhost:5432
+# PostgreSQL: localhost:5432 (user: postgres, db: kazoerukun)
 # Redis: localhost:6380
 ```
 
@@ -127,5 +132,10 @@ docker compose exec frontend cargo test
 
 ### Cron Jobs (Integrated in Backend)
 - **Sync Job**: Runs every 60 seconds to sync Redis counters to PostgreSQL
+  - Implemented in `app/backend/src/cron/jobs/sync.rs`
+  - Called internally via `PUT /session` endpoint
 - **Status History Job**: Runs every 24 hours to update weekly status history
+  - Implemented in `app/backend/src/cron/jobs/status_history.rs`
+  - Called internally via `PUT /status_history` endpoint
 - Both jobs are managed via tokio::spawn with automatic retry logic
+- Configuration in `app/backend/src/cron/config.rs`

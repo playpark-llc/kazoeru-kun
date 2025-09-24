@@ -30,8 +30,8 @@ localhost:3001
        - 新規セッションの場合はCookieを設定し、value=1として作成
     
     2. `PUT /session`
-       - Redis→MySQL同期（cronから定期実行）
-       - RedisのセッションデータをMySQLのsession_counterテーブルにupsert
+       - Redis→PostgreSQL同期（バックエンド内部のcronジョブから定期実行）
+       - RedisのセッションデータをPostgreSQLのsession_counterテーブルにupsert
        - 既存レコードは累積カウントを更新、新規は作成
     
     3. `GET /session_counter?start_date=yyyy-mm-dd&end_date=yyyy-mm-dd`
@@ -55,7 +55,7 @@ localhost:3001
     ### ヘルスチェック
     6. `GET /health`
        - システム全体のヘルスチェック
-       - MySQL、Redisの接続状態とレイテンシを返す
+       - PostgreSQL、Redisの接続状態とレイテンシを返す
     
     7. `GET /health/liveness`
        - Kubernetesライブネスプローブ用
@@ -73,16 +73,19 @@ localhost:3001
   - セッションベースのクリックカウンタキャッシュ
   - (key, value): (session_id, count) の期限付きKey-Valueストア
   - TTLはセッションCookieの有効期限と同期
-- mysql (ポート: 7776)
-  - 永続的なデータストレージ
+- postgres (ポート: 5432)
+  - 永続的なデータストレージ（PostgreSQL 16 Alpine）
   - テーブル:
     - `session_counter`: セッションごとのクリック数
     - `status_history`: 週次ステータス履歴（期間、カウント、ステータス）
   - [Database Definition](./doc/KazoeruKun/README.md)
-- cron
-  - 定期タスク実行コンテナ
-  - 1分ごと: `PUT /session`を呼び出してRedis→MySQLへデータ同期
-  - 週次: `PUT /status_history`を呼び出して週次ステータスを更新
+
+## 定期実行タスク（バックエンド内蔵）
+
+バックエンドアプリケーション内でtokio::spawnにより以下のタスクが自動実行されます：
+- **同期ジョブ**: 60秒ごとにRedis→PostgreSQLへデータ同期
+- **ステータス履歴ジョブ**: 24時間ごとに週次ステータスを更新
+- 両ジョブとも自動リトライロジック付き
 
 ## シーケンス図
 
@@ -96,7 +99,7 @@ sequenceDiagram
     participant Frontend as フロントエンド
     participant Backend as バックエンド
     participant Redis as Redis
-    participant MySQL as MySQL
+    participant PostgreSQL as PostgreSQL
 
     User->>+Frontend: クリックイベント
     Frontend->>+Backend: POST /session
@@ -122,12 +125,12 @@ sequenceDiagram
     participant User as ユーザー
     participant Frontend as フロントエンド
     participant Backend as バックエンド
-    participant MySQL as MySQL
+    participant PostgreSQL as PostgreSQL
 
     User->>Frontend: ページアクセス
     Frontend->>+Backend: GET /session_counter?start_date=&end_date=
-    Backend->>+MySQL: session_counterテーブルから指定期間の合計取得
-    MySQL-->>-Backend: 総クリック数
+    Backend->>+PostgreSQL: session_counterテーブルから指定期間の合計取得
+    PostgreSQL-->>-Backend: 総クリック数
     Backend-->>-Frontend: 総クリック数レスポンス
     Frontend->>User: 総クリック数表示
 ```
@@ -139,48 +142,48 @@ sequenceDiagram
     participant User as ユーザー
     participant Frontend as フロントエンド
     participant Backend as バックエンド
-    participant MySQL as MySQL
+    participant PostgreSQL as PostgreSQL
 
     User->>Frontend: ステータス画面アクセス
     Frontend->>+Backend: GET /status_history?limit=&offset=
-    Backend->>+MySQL: status_historyテーブルから最新ステータスと履歴取得
-    MySQL-->>-Backend: ステータスデータ
+    Backend->>+PostgreSQL: status_historyテーブルから最新ステータスと履歴取得
+    PostgreSQL-->>-Backend: ステータスデータ
     Backend-->>-Frontend: ステータス履歴レスポンス
     Frontend->>User: 現在のステータスと履歴表示
 ```
 
-### Cron Job系（定期実行）
+### バックエンド内部の定期実行タスク
 
-#### クリック数更新 Redis -> MySQL
+#### クリック数更新 Redis -> PostgreSQL（60秒ごと）
 
 ```mermaid
 sequenceDiagram
-    participant Cron as Cronジョブ
+    participant Backend as バックエンド（内部タスク）
     participant Backend as バックエンド
     participant Redis as Redis
-    participant MySQL as MySQL
+    participant PostgreSQL as PostgreSQL
 
-    Cron->>+Backend: PUT /session
+    Backend->>Backend: 内部タスクがPUT /sessionを実行
     Backend->>+Redis: 全セッションのカウント取得
     Redis-->>-Backend: カウントデータ
-    Backend->>+MySQL: session_counterテーブルをupsert
-    MySQL-->>-Backend: 更新確認
-    Backend-->>-Cron: 同期完了
+    Backend->>+PostgreSQL: session_counterテーブルをupsert
+    PostgreSQL-->>-Backend: 更新確認
+    Backend->>Backend: 次回実行をスケジュール（60秒後）
 ```
 
-#### 週次ステータス更新
+#### 週次ステータス更新（24時間ごと）
 
 ```mermaid
 sequenceDiagram
-    participant Cron as Cronジョブ
+    participant Backend as バックエンド（内部タスク）
     participant Backend as バックエンド
-    participant MySQL as MySQL
+    participant PostgreSQL as PostgreSQL
 
-    Cron->>+Backend: PUT /status_history
-    Backend->>+MySQL: 先週のクリック数集計
-    MySQL-->>-Backend: 週次カウント
+    Backend->>Backend: 内部タスクがPUT /status_historyを実行
+    Backend->>+PostgreSQL: 先週のクリック数集計
+    PostgreSQL-->>-Backend: 週次カウント
     Backend->>Backend: ステータス計算（目標値と比較）
-    Backend->>+MySQL: status_historyテーブルに新規レコード挿入
-    MySQL-->>-Backend: 挿入確認
-    Backend-->>-Cron: 更新完了
+    Backend->>+PostgreSQL: status_historyテーブルに新規レコード挿入
+    PostgreSQL-->>-Backend: 挿入確認
+    Backend->>Backend: 次回実行をスケジュール（24時間後）
 ```
