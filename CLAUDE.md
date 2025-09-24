@@ -5,29 +5,28 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Project Overview
 
 Kazoeru-kun (カウントくん) is a click counter application with a Rust-based microservices architecture. It features:
-- **Backend**: Rust with Rocket framework (API server)
+- **Backend**: Rust with Rocket framework (API server with integrated cron jobs)
 - **Frontend**: Rust with Yew framework (WebAssembly)
-- **Storage**: Redis for session cache, MySQL for persistent data
+- **Storage**: Redis for session cache, PostgreSQL for persistent data
 - **Infrastructure**: Docker Compose for local development
 
 ## Architecture
 
 ### Service Architecture
-The system consists of 5 Docker services:
-1. **backend** (`back`): Rocket API server handling click counting and data persistence
+The system consists of 4 Docker services:
+1. **backend** (`back`): Rocket API server handling click counting, data persistence, and scheduled tasks
 2. **frontend**: Yew WebAssembly application served via Trunk
 3. **redis**: Session-based click counter cache with TTL
-4. **mysql** (`db`): Persistent storage for aggregated counts
-5. **cron**: Periodic sync from Redis to MySQL (1-minute intervals)
+4. **postgres** (`db`): Persistent storage for aggregated counts
 
 ### Data Flow
 1. User clicks → Frontend calls `POST /session` → Redis increments counter
-2. Cron job (every minute) → Calls `PUT /session` → Syncs Redis to MySQL
-3. Frontend loads → Calls `GET /session_counter` → Displays total from MySQL
+2. Backend cron job (every minute via tokio::spawn) → Syncs Redis to PostgreSQL
+3. Frontend loads → Calls `GET /session_counter` → Displays total from PostgreSQL
 
 ### API Endpoints
 - `POST /session`: Increment click count for session (Redis)
-- `PUT /session`: Sync Redis counts to MySQL (called by cron)
+- `PUT /session`: Sync Redis counts to PostgreSQL (called by internal cron job)
 - `GET /session_counter?start_date=yyyy-mm-dd&end_date=yyyy-mm-dd`: Get aggregated counts
 
 ## Development Commands
@@ -40,7 +39,7 @@ docker compose up -d
 # Access application
 # Frontend: http://localhost:3001
 # Backend API: http://localhost:8881
-# MySQL: localhost:7776
+# PostgreSQL: localhost:5432
 # Redis: localhost:6380
 ```
 
@@ -77,8 +76,8 @@ npm run dev:serve  # Run Trunk dev server
 
 ### Database Management
 ```bash
-# Access MySQL
-docker compose exec db mysql -u root -padmin_password KazoeruKun
+# Access PostgreSQL
+docker compose exec db psql -U postgres -d kazoerukun
 
 # Generate database documentation (automatic on db health check)
 docker compose run --rm tbls
@@ -97,9 +96,10 @@ docker compose exec frontend cargo test
 ## Environment Variables
 
 ### Backend (.env)
-- `DATABASE_URL`: MySQL connection string
+- `DATABASE_URL`: PostgreSQL connection string
 - `ALLOWED_ORIGINS`: CORS allowed origins
-- Redis connection is hardcoded to `redis:6379`
+- `REDIS_URL`: Redis connection string (default: redis://redis:6379)
+- `TARGET_VALUE`: Target value for weekly status calculation (default: 10)
 
 ### Frontend (.env)
 - `APP_API_ROOT`: Backend API URL (default: http://localhost:8881)
@@ -124,3 +124,8 @@ docker compose exec frontend cargo test
 - Backend uses cargo with sea-orm for database ORM
 - Frontend uses Trunk for WASM bundling and serving
 - Tailwind CSS for styling (compiled via npm scripts)
+
+### Cron Jobs (Integrated in Backend)
+- **Sync Job**: Runs every 60 seconds to sync Redis counters to PostgreSQL
+- **Status History Job**: Runs every 24 hours to update weekly status history
+- Both jobs are managed via tokio::spawn with automatic retry logic
