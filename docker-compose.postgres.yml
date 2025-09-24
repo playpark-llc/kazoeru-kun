@@ -59,6 +59,19 @@ services:
       retries: 6
       start_period: 3s
 
+  tbls: # create table documents when db healthcheck passed
+    image: ghcr.io/k1low/tbls
+    working_dir: /tbls
+    volumes:
+      - ./doc:/tbls/doc
+      - ./.tbls.yml:/tbls/.tbls.yml
+    depends_on:
+      db:
+        condition: service_healthy
+    entrypoint: >
+      tbls doc -f --rm-dist
+    tty: true
+
   # Note: Cron service removed as it's now integrated into the backend via tokio::spawn
 
 volumes:
