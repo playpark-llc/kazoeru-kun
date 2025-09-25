@@ -58,10 +58,10 @@ services:
     container_name: kazoeru-kun-postgres-prod
     environment:
       - POSTGRES_PASSWORD=${DB_PASSWORD:-admin_password}
-      - POSTGRES_DB=KazoeruKun
+      - POSTGRES_DB=kazoerukun
       - POSTGRES_USER=${DB_USER:-postgres}
     ports:
-      - "7776:5432"
+      - "5432:5432"
     volumes:
       - postgres_data_prod:/var/lib/postgresql/data
       - ./postgres/init:/docker-entrypoint-initdb.d
