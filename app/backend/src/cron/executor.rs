@@ -68,7 +68,24 @@ where
                             config.max_retries,
                             e
                         );
-                        // TODO: Send metrics/alerts for monitoring
+
+                        // Log critical failure for monitoring systems to pick up
+                        log::error!(
+                            "CRON_JOB_CRITICAL_FAILURE: job_name={} max_retries_exceeded={} error_type={}",
+                            config.name,
+                            config.max_retries,
+                            std::any::type_name_of_val(&*e)
+                        );
+
+                        // Additional structured logging for observability
+                        log::error!(
+                            "{{\"event\": \"cron_job_failure\", \"job_name\": \"{}\", \"retry_count\": {}, \"max_retries\": {}, \"error\": \"{}\"}}",
+                            config.name,
+                            retry_count,
+                            config.max_retries,
+                            e
+                        );
+
                         break;
                     }
                 }

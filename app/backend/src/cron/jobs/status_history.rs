@@ -9,9 +9,19 @@ fn calculate_delay_to_midnight() -> Duration {
     let tomorrow_midnight = (now.date_naive() + chrono::Duration::days(1))
         .and_hms_opt(0, 0, 0)
         .expect("Failed to create midnight time");
-    let tomorrow_midnight = Local
-        .from_local_datetime(&tomorrow_midnight)
-        .unwrap();
+
+    // Handle potential ambiguous local time during DST transitions
+    let tomorrow_midnight = match Local.from_local_datetime(&tomorrow_midnight) {
+        chrono::LocalResult::Single(dt) => dt,
+        chrono::LocalResult::Ambiguous(dt, _) => {
+            log::warn!("Ambiguous local time detected (DST transition), using first option");
+            dt
+        },
+        chrono::LocalResult::None => {
+            log::error!("Invalid local time detected, defaulting to 24 hours delay");
+            return Duration::from_secs(86400);
+        }
+    };
 
     (tomorrow_midnight - now)
         .to_std()
