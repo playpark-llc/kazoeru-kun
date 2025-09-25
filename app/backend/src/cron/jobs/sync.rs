@@ -5,7 +5,12 @@ use std::sync::Arc;
 pub fn spawn_sync_cron_job(sync_service: Arc<opt::services::SyncService>) {
     let sync_service_clone = sync_service.clone();
 
-    let config = CronJobConfig::new("Redis to Database sync", 300) // 5 minutes
+    let interval_secs = std::env::var("SYNC_JOB_INTERVAL_SECS")
+        .ok()
+        .and_then(|v| v.parse::<u64>().ok())
+        .unwrap_or(60); // Default: 1 minute
+
+    let config = CronJobConfig::new("Redis to Database sync", interval_secs)
         .with_retries(3, 30);
 
     spawn_cron_job(config, move || {

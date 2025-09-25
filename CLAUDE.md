@@ -105,6 +105,8 @@ docker compose exec frontend cargo test
 - `ALLOWED_ORIGINS`: CORS allowed origins
 - `REDIS_URL`: Redis connection string (default: redis://redis:6379)
 - `TARGET_VALUE`: Target value for weekly status calculation (default: 10)
+- `SYNC_JOB_INTERVAL_SECS`: Redis to PostgreSQL sync interval in seconds (default: 60)
+- `STATUS_HISTORY_JOB_INTERVAL_SECS`: Status history update interval in seconds (default: 86400)
 
 ### Frontend (.env)
 - `APP_API_ROOT`: Backend API URL (default: http://localhost:8881)
@@ -131,11 +133,14 @@ docker compose exec frontend cargo test
 - Tailwind CSS for styling (compiled via npm scripts)
 
 ### Cron Jobs (Integrated in Backend)
-- **Sync Job**: Runs every 60 seconds to sync Redis counters to PostgreSQL
+- **Sync Job**: Syncs Redis counters to PostgreSQL
+  - Interval: Configured via `SYNC_JOB_INTERVAL_SECS` env variable (default: 60 seconds)
   - Implemented in `app/backend/src/cron/jobs/sync.rs`
   - Called internally via `PUT /session` endpoint
-- **Status History Job**: Runs every 24 hours to update weekly status history
+- **Status History Job**: Updates weekly status history
+  - Interval: Configured via `STATUS_HISTORY_JOB_INTERVAL_SECS` env variable (default: 86400 seconds/24 hours)
   - Implemented in `app/backend/src/cron/jobs/status_history.rs`
   - Called internally via `PUT /status_history` endpoint
 - Both jobs are managed via tokio::spawn with automatic retry logic
 - Configuration in `app/backend/src/cron/config.rs`
+- Minimum interval validation: 1 second (prevents excessive load)

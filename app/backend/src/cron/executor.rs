@@ -9,6 +9,17 @@ where
     Fut: Future<Output = Result<String, Box<dyn std::error::Error + Send + Sync>>> + Send,
 {
     tokio::spawn(async move {
+        // Validate interval (minimum 1 second to prevent excessive load)
+        let validated_interval = if config.interval_secs < 1 {
+            log::warn!(
+                "Cron job '{}' interval too short ({}s), using minimum 1s",
+                config.name, config.interval_secs
+            );
+            1
+        } else {
+            config.interval_secs
+        };
+
         // Handle initial delay if specified
         if let Some(delay) = config.initial_delay {
             log::info!(
@@ -21,12 +32,12 @@ where
             log::info!(
                 "Starting cron job '{}' (interval: {} seconds)",
                 config.name,
-                config.interval_secs
+                validated_interval
             );
         }
 
         // Create interval timer
-        let mut interval = tokio::time::interval(Duration::from_secs(config.interval_secs));
+        let mut interval = tokio::time::interval(Duration::from_secs(validated_interval));
 
         loop {
             interval.tick().await;

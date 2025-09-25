@@ -27,7 +27,12 @@ pub fn spawn_status_history_cron_job(
     let status_service_clone = status_service.clone();
     let config_clone = config.clone();
 
-    let cron_config = CronJobConfig::new("Status history update", 86400) // 24 hours
+    let interval_secs = std::env::var("STATUS_HISTORY_JOB_INTERVAL_SECS")
+        .ok()
+        .and_then(|v| v.parse::<u64>().ok())
+        .unwrap_or(86400); // Default: 24 hours
+
+    let cron_config = CronJobConfig::new("Status history update", interval_secs)
         .with_initial_delay(initial_delay)
         .with_retries(3, 60);
 
