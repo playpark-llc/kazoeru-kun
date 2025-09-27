@@ -84,9 +84,9 @@ impl DatabaseConfig {
             .map_err(|_| ConfigError::MissingEnvVar("DATABASE_URL".to_string()))?;
 
         // Validate URL format (basic check)
-        if !url.starts_with("mysql://") && !url.starts_with("postgresql://") {
+        if !url.starts_with("postgresql://") {
             return Err(ConfigError::InvalidValue(
-                "DATABASE_URL must start with mysql:// or postgresql://".to_string(),
+                "DATABASE_URL must start with postgresql://".to_string(),
             ));
         }
 
@@ -152,7 +152,7 @@ mod tests {
     static ENV_MUTEX: Mutex<()> = Mutex::new(());
 
     fn setup_test_env() {
-        env::set_var("DATABASE_URL", "mysql://user:pass@localhost/db");
+        env::set_var("DATABASE_URL", "postgresql://user:pass@localhost/db");
         env::set_var("REDIS_URL", "redis://localhost:6379");
         env::set_var(
             "ALLOWED_ORIGINS",
@@ -175,7 +175,7 @@ mod tests {
 
         let config = AppConfig::from_env().expect("Failed to load config");
 
-        assert_eq!(config.database.url, "mysql://user:pass@localhost/db");
+        assert_eq!(config.database.url, "postgresql://user:pass@localhost/db");
         assert_eq!(config.redis.url, "redis://localhost:6379");
         assert_eq!(config.target_value, 500000);
         assert_eq!(config.cors.allowed_origins.len(), 2);
@@ -191,7 +191,7 @@ mod tests {
         let result = DatabaseConfig::from_env();
         assert!(result.is_err());
 
-        env::set_var("DATABASE_URL", "mysql://valid_url");
+        env::set_var("DATABASE_URL", "postgresql://valid_url");
         let result = DatabaseConfig::from_env();
         assert!(result.is_ok());
 

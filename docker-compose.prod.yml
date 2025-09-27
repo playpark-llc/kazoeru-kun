@@ -54,23 +54,22 @@ services:
           memory: 128M
 
   db:
-    image: mysql:8.0
-    container_name: kazoeru-kun-mysql-prod
+    image: postgres:15-alpine
+    container_name: kazoeru-kun-postgres-prod
     environment:
-      - MYSQL_ROOT_PASSWORD=${DB_ROOT_PASSWORD:-admin_password}
-      - MYSQL_DATABASE=KazoeruKun
-      - MYSQL_USER=${DB_USER:-kazoeru_user}
-      - MYSQL_PASSWORD=${DB_PASSWORD:-kazoeru_password}
+      - POSTGRES_PASSWORD=${DB_PASSWORD:-admin_password}
+      - POSTGRES_DB=kazoerukun
+      - POSTGRES_USER=${DB_USER:-postgres}
     ports:
-      - "7776:3306"
+      - "5432:5432"
     volumes:
-      - mysql_data_prod:/var/lib/mysql
-      - ./mysql/init:/docker-entrypoint-initdb.d
+      - postgres_data_prod:/var/lib/postgresql/data
+      - ./postgres/init:/docker-entrypoint-initdb.d
     networks:
       - kazoeru-network
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -99,29 +98,12 @@ services:
         reservations:
           memory: 128M
 
-  cron:
-    build:
-      context: ./cron
-      dockerfile: Dockerfile
-    container_name: kazoeru-kun-cron-prod
-    depends_on:
-      - back
-    networks:
-      - kazoeru-network
-    restart: unless-stopped
-    deploy:
-      resources:
-        limits:
-          memory: 128M
-        reservations:
-          memory: 64M
-
 networks:
   kazoeru-network:
     driver: bridge
 
 volumes:
-  mysql_data_prod:
+  postgres_data_prod:
     driver: local
   redis_data_prod:
     driver: local

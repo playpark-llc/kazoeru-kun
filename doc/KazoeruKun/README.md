@@ -1,11 +1,17 @@
-# KazoeruKun
+# kazoerukun
 
 ## Tables
 
 | Name | Columns | Comment | Type |
 | ---- | ------- | ------- | ---- |
-| [session_counter](session_counter.md) | 5 |  | BASE TABLE |
-| [status_history](status_history.md) | 7 |  | BASE TABLE |
+| [public.session_counter](public.session_counter.md) | 5 |  | BASE TABLE |
+| [public.status_history](public.status_history.md) | 7 |  | BASE TABLE |
+
+## Enums
+
+| Name | Values |
+| ---- | ------- |
+| public.status_enum | CLEAN, DIRTY, IMMACULATE, SPOTLESS, UNCLEAN |
 
 ## Relations
 

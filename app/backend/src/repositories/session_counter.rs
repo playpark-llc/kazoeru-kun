@@ -63,8 +63,8 @@ impl DbSessionCounterRepository {
             id: entity.id,
             session_id: entity.session_id,
             count: entity.count,
-            created_at: Local.from_utc_datetime(&entity.created_at.naive_utc()),
-            updated_at: Local.from_utc_datetime(&entity.updated_at.naive_utc()),
+            created_at: Local.from_utc_datetime(&entity.created_at.and_utc().naive_utc()),
+            updated_at: Local.from_utc_datetime(&entity.updated_at.and_utc().naive_utc()),
         }
     }
 }
@@ -247,7 +247,9 @@ mod tests {
     use sea_orm::Database;
 
     async fn create_test_db() -> DatabaseConnection {
-        Database::connect("mysql://user:password@localhost/test_db")
+        let test_database_url = std::env::var("TEST_DATABASE_URL")
+            .unwrap_or_else(|_| "postgresql://postgres:test@localhost/test_db".to_string());
+        Database::connect(test_database_url)
             .await
             .unwrap()
     }

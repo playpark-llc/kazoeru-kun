@@ -1,6 +1,10 @@
 use opt::config::AppConfig;
 use opt::di::DiContainer;
 use opt::routes::configure_routes;
+use std::sync::Arc;
+
+mod cron;
+use cron::{spawn_status_history_cron_job, spawn_sync_cron_job};
 
 #[macro_use]
 extern crate rocket;
@@ -18,6 +22,10 @@ async fn rocket() -> _ {
     let container = DiContainer::build(app_config)
         .await
         .expect("Failed to build dependency injection container");
+
+    // Start cron jobs
+    spawn_sync_cron_job(container.sync_service.clone());
+    spawn_status_history_cron_job(container.status_service.clone(), Arc::new(container.config.clone()));
 
     // Get CORS configuration
     let cors = container.get_cors().expect("Failed to configure CORS");
