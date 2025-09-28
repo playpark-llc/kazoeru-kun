@@ -125,6 +125,18 @@ To test the production configuration locally:
 
 3. Access at http://localhost:3001
 
+### Environment Variable Priority
+
+**Local Testing (docker-compose)**:
+- Uses `.env.production` file
+- Rocket settings in `environment:` section
+- Application settings from `env_file:`
+
+**Fly.io Production**:
+- Uses `fly secrets` (no .env files)
+- Environment variables injected at runtime
+- More secure (secrets never in Docker image)
+
 ## Monitoring
 
 ### Fly.io Monitoring
