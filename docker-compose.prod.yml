@@ -15,7 +15,7 @@ services:
       - ROCKET_PROFILE=production
       - RUST_LOG=info
     env_file:
-      - .env.production
+      - ./app/backend/.env.production
     networks:
       - kazoeru-network
     restart: unless-stopped
