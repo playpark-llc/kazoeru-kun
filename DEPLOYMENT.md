@@ -111,31 +111,68 @@ This guide covers deploying Kazoeru-kun to production using Fly.io with Supabase
 5. **Access Application**:
    - Open https://kazoeru-kun.fly.dev
 
-## Local Production Testing
+## Testing Strategies
 
-To test the production configuration locally:
+### Development Testing
+Use the standard `docker-compose.yml` with local PostgreSQL and Redis:
+```bash
+docker compose up
+```
 
-1. Set up `.env.production` with your external service credentials
+### Production Build Testing
 
-2. Build and run with production docker-compose:
+#### ⚠️ Docker on macOS Limitation
+**IMPORTANT**: Docker Desktop on macOS does not support IPv6 connectivity by default. Since Supabase may resolve to IPv6-only addresses, you might encounter `NetworkUnreachable` errors when testing locally with Docker.
+
+#### Workarounds:
+
+**Option 1: Test connections directly from host**
+```bash
+# Use the provided test script
+./test-connection.sh
+
+# Or test manually
+psql "postgresql://postgres:ypf6GHQ3mdp%21qhw0ywp@db.[PROJECT_ID].supabase.co:5432/postgres?sslmode=require" -c "SELECT 1"
+```
+
+**Option 2: Deploy directly to Fly.io**
+Since Fly.io supports IPv6, the connections will work correctly in production even if they fail locally.
+
+**Option 3: Use development environment for testing**
+Use the standard `docker-compose.yml` with local PostgreSQL and Redis for development testing.
+
+#### Production Build Process
+1. **Set up actual production credentials** in `app/backend/.env.production`:
+   ```env
+   DATABASE_URL=postgresql://postgres:[PASSWORD]@db.[PROJECT_ID].supabase.co:5432/postgres?sslmode=require
+   REDIS_URL=redis://default:[PASSWORD]@[ENDPOINT].upstash.io:6379
+   ```
+   Note: Use URL encoding for special characters (e.g., `!` becomes `%21`)
+
+2. Build the production images:
    ```bash
    docker compose -f docker-compose.prod.yml build
-   docker compose -f docker-compose.prod.yml up
    ```
 
-3. Access at http://localhost:3001
+3. If external connections work from your environment:
+   ```bash
+   docker compose -f docker-compose.prod.yml up
+   # Access at http://localhost:3001
+   ```
 
-### Environment Variable Priority
+### Why External Services for Production Testing?
+- **Real environment validation**: Test actual production connections
+- **Network latency testing**: Understand real-world performance
+- **Configuration verification**: Ensure credentials and URLs work
+- **No local service conflicts**: Avoid port collisions with dev environment
 
-**Local Testing (docker-compose)**:
-- Uses `.env.production` file
-- Rocket settings in `environment:` section
-- Application settings from `env_file:`
-
-**Fly.io Production**:
-- Uses `fly secrets` (no .env files)
-- Environment variables injected at runtime
-- More secure (secrets never in Docker image)
+### Fly.io Production Deployment
+Uses `fly secrets` for environment variables (no .env files):
+```bash
+fly secrets set DATABASE_URL="..."
+fly secrets set REDIS_URL="..."
+fly deploy
+```
 
 ## Monitoring
 
