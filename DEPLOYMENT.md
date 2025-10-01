@@ -88,7 +88,19 @@
 
 2. **シークレットの登録**
    ```bash
-   fly secrets set      DATABASE_URL="postgresql://..."      REDIS_URL="redis://default:..."      ALLOWED_ORIGINS="https://kazoeru-kun.fly.dev"      TARGET_VALUE="100000"      SYNC_JOB_INTERVAL_SECS="60"      STATUS_HISTORY_JOB_INTERVAL_SECS="86400"      ROCKET_SECRET_KEY="<生成したキー>"
+   fly secrets set \
+     DATABASE_URL="postgresql://..." \
+     REDIS_URL="redis://default:..." \
+     ALLOWED_ORIGINS="https://kazoeru-kun.fly.dev" \
+     TARGET_VALUE="100000" \
+     SYNC_JOB_INTERVAL_SECS="60" \
+     STATUS_HISTORY_JOB_INTERVAL_SECS="86400" \
+     ROCKET_SECRET_KEY="<生成したキー>"
+   ```
+
+   **シークレット検証**
+   ```bash
+   fly secrets list | grep ROCKET_SECRET_KEY
    ```
 
 3. **デプロイ**

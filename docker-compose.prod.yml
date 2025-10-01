@@ -8,10 +8,10 @@ services:
     image: kazoeru-kun-backend-prod:latest
     container_name: kazoeru-kun-backend-prod
     ports:
-      - "8881:8881"
+      - "8080:8080"
     environment:
       - ROCKET_ADDRESS=0.0.0.0
-      - ROCKET_PORT=8881
+      - ROCKET_PORT=8080
       - ROCKET_PROFILE=production
       - RUST_LOG=info
     env_file:
@@ -35,7 +35,7 @@ services:
     ports:
       - "3001:80"
     environment:
-      - APP_API_ROOT=http://backend:8881
+      - APP_API_ROOT=${PRODUCTION_API_URL:-http://localhost:8080}
     depends_on:
       - back
     networks:
