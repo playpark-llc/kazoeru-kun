@@ -1,8 +1,8 @@
-# Deployment Guide for Kazoeru-kun
+# Kazoeru-kun デプロイガイド
 
-This guide covers deploying Kazoeru-kun to production using Fly.io with Supabase (PostgreSQL) and Upstash (Redis).
+このドキュメントは、Supabase (PostgreSQL) と Upstash (Redis) を利用しながら、Kazoeru-kun を Fly.io 上に本番デプロイするための手順をまとめたものです。
 
-## Architecture
+## アーキテクチャ
 
 ```
 ┌─────────────────┐
@@ -21,253 +21,183 @@ This guide covers deploying Kazoeru-kun to production using Fly.io with Supabase
 └────────┘ └─────────┘
 ```
 
-## Prerequisites
+## 前提条件
 
-1. **Supabase Account**
-   - Sign up at https://supabase.com
-   - Create a new project (Tokyo region recommended)
+1. **Supabase アカウント**
+   - https://supabase.com でサインアップ
+   - 新しいプロジェクトを作成（リージョンは Tokyo 推奨）
 
-2. **Upstash Account**
-   - Sign up at https://console.upstash.com
-   - Create Redis database (Tokyo region)
+2. **Upstash アカウント**
+   - https://console.upstash.com でサインアップ
+   - Tokyo (ap-northeast-1) リージョンで Redis データベースを作成
 
-3. **Fly.io Account**
-   - Sign up at https://fly.io
-   - Install Fly CLI: `curl -L https://fly.io/install.sh | sh`
-   - Authenticate: `fly auth login`
+3. **Fly.io アカウント**
+   - https://fly.io でサインアップ
+   - Fly CLI をインストール: `curl -L https://fly.io/install.sh | sh`
+   - `fly auth login` で認証
 
-## Step 1: Configure Supabase
+## Step 1: Supabase の準備
 
-1. Create a new Supabase project
-2. Go to Settings → Database
-3. Copy the connection string (use Pooling connection on port 6432)
-4. Run migrations:
+1. Supabase プロジェクトを作成
+2. Settings → Database から接続情報 (Connection string) を取得
+   - Fly からはコネクションプーラー (port 6543 または 6432) を利用
+3. マイグレーションを実行:
    ```bash
    cd app/backend/migration
-   DATABASE_URL="postgresql://postgres:[PASSWORD]@db.[PROJECT_ID].supabase.co:5432/postgres" \
-   sea-orm-cli migrate up
+   DATABASE_URL="postgresql://postgres:[PASSWORD]@db.[PROJECT_ID].supabase.co:5432/postgres"    sea-orm-cli migrate up
    ```
+   ※ Supabase の接続文字列が IPv6 のみを返す場合、必要に応じて VPN または別環境から実行してください。
 
-## Step 2: Configure Upstash Redis
+## Step 2: Upstash Redis の準備
 
-1. Create a new Redis database in Upstash
-2. Select Tokyo region (ap-northeast-1)
-3. Copy the Redis URL from the dashboard
-4. Test connection:
+1. Upstash にログインし、新しい Redis データベースを作成
+2. リージョンは Tokyo (ap-northeast-1) を選択
+3. ダッシュボードから Redis URL をコピー
+4. 接続確認 (任意):
    ```bash
-   redis-cli -u "redis://default:xxx@xxx.upstash.io:6379" ping
+   redis-cli -u "redis://default:xxxx@xxxxx.upstash.io:6379" ping
    ```
 
-## Step 3: Configure Environment Variables
+## Step 3: 環境変数の設定
 
-1. Copy the environment template:
+1. テンプレートをコピー:
    ```bash
-   cp .env.production.example .env.production
+   cp app/backend/.env.production.example app/backend/.env.production
    ```
 
-2. Edit `.env.production` with your values:
+2. `app/backend/.env.production` を編集して実値を設定:
    ```env
-   SUPABASE_DATABASE_URL=postgresql://postgres:[PASSWORD]@db.[PROJECT_ID].supabase.co:6432/postgres
-   UPSTASH_REDIS_URL=redis://default:[PASSWORD]@[ENDPOINT].upstash.io:6379
+   DATABASE_URL=postgresql://postgres:[PASSWORD]@aws-1-ap-northeast-1.pooler.supabase.com:6543/postgres
+   REDIS_URL=redis://default:[PASSWORD]@[ENDPOINT].upstash.io:6379
    ALLOWED_ORIGINS=https://kazoeru-kun.fly.dev
-   TARGET_VALUE=10
+   TARGET_VALUE=100000
    SYNC_JOB_INTERVAL_SECS=60
    STATUS_HISTORY_JOB_INTERVAL_SECS=86400
+   ROCKET_SECRET_KEY="<32バイトのランダム文字列>"
    ```
+   - `ROCKET_SECRET_KEY` は `openssl rand -base64 32` などで生成します。
+   - Fly では `.env.production` を直接参照しないため、最終的には `fly secrets set` に登録します。
 
-## Step 4: Deploy to Fly.io
+## Step 4: Fly.io へのデプロイ
 
-1. **Initialize Fly App** (if not already done):
+1. **アプリ初期化 (未実行の場合のみ)**
    ```bash
+   cd app/backend
    fly launch --name kazoeru-kun --region nrt --no-deploy
    ```
 
-2. **Set Secrets**:
+2. **シークレットの登録**
    ```bash
-   # Database
-   fly secrets set SUPABASE_DATABASE_URL="postgresql://..."
-
-   # Redis
-   fly secrets set UPSTASH_REDIS_URL="redis://default:..."
-
-   # Application settings
-   fly secrets set ALLOWED_ORIGINS="https://kazoeru-kun.fly.dev"
-   fly secrets set TARGET_VALUE="10"
-   fly secrets set SYNC_JOB_INTERVAL_SECS="60"
-   fly secrets set STATUS_HISTORY_JOB_INTERVAL_SECS="86400"
+   fly secrets set      DATABASE_URL="postgresql://..."      REDIS_URL="redis://default:..."      ALLOWED_ORIGINS="https://kazoeru-kun.fly.dev"      TARGET_VALUE="100000"      SYNC_JOB_INTERVAL_SECS="60"      STATUS_HISTORY_JOB_INTERVAL_SECS="86400"      ROCKET_SECRET_KEY="<生成したキー>"
    ```
 
-3. **Deploy**:
+3. **デプロイ**
    ```bash
    fly deploy
    ```
 
-4. **Verify Deployment**:
+4. **状態確認**
    ```bash
    fly status
    fly logs
    ```
 
-5. **Access Application**:
-   - Open https://kazoeru-kun.fly.dev
+5. **アプリにアクセス**
+   - `https://kazoeru-kun.fly.dev` をブラウザで確認
+   - `fly open` でもアクセス可能
 
-## Testing Strategies
+## テスト戦略
 
-### Development Testing
-Use the standard `docker-compose.yml` with local PostgreSQL and Redis:
+### 開発用テスト
+ローカル PostgreSQL と Redis を含む標準の `docker-compose.yml` を使用:
 ```bash
 docker compose up
 ```
 
-### Production Build Testing
+### 本番ビルドテスト
 
-#### ⚠️ Docker on macOS Limitation
-**IMPORTANT**: Docker Desktop on macOS does not support IPv6 connectivity by default. Since Supabase may resolve to IPv6-only addresses, you might encounter `NetworkUnreachable` errors when testing locally with Docker.
+#### ⚠️ macOS の Docker 制限
+Docker Desktop (macOS) は標準で IPv6 をサポートしていないため、Supabase が IPv6 のみのアドレスを返すケースでは `NetworkUnreachable` エラーになる可能性があります。
 
-#### Workarounds:
+#### 回避策例
+- IPv6 が利用できるマシンや CI でテストを実行
+- Fly.io の機能を用いた Staging デプロイで検証
 
-**Option 1: Test connections directly from host**
-```bash
-# Use the provided test script
-./test-connection.sh
-
-# Or test manually
-psql "postgresql://postgres:ypf6GHQ3mdp%21qhw0ywp@db.[PROJECT_ID].supabase.co:5432/postgres?sslmode=require" -c "SELECT 1"
-```
-
-**Option 2: Deploy directly to Fly.io**
-Since Fly.io supports IPv6, the connections will work correctly in production even if they fail locally.
-
-**Option 3: Use development environment for testing**
-Use the standard `docker-compose.yml` with local PostgreSQL and Redis for development testing.
-
-#### Production Build Process
-1. **Set up actual production credentials** in `app/backend/.env.production`:
-   ```env
-   DATABASE_URL=postgresql://postgres:[PASSWORD]@db.[PROJECT_ID].supabase.co:5432/postgres?sslmode=require
-   REDIS_URL=redis://default:[PASSWORD]@[ENDPOINT].upstash.io:6379
-   ```
-   Note: Use URL encoding for special characters (e.g., `!` becomes `%21`)
-
-2. Build the production images:
+#### 本番設定でのローカル起動 (外部接続が可能な環境向け)
+1. `.env.production` に実際の接続情報を設定
+2. イメージをビルド:
    ```bash
    docker compose -f docker-compose.prod.yml build
    ```
-
-3. If external connections work from your environment:
+3. 起動:
    ```bash
    docker compose -f docker-compose.prod.yml up
-   # Access at http://localhost:3001
+   # ブラウザで http://localhost:3001
    ```
 
-### Why External Services for Production Testing?
-- **Real environment validation**: Test actual production connections
-- **Network latency testing**: Understand real-world performance
-- **Configuration verification**: Ensure credentials and URLs work
-- **No local service conflicts**: Avoid port collisions with dev environment
+## 監視
 
-### Fly.io Production Deployment
-Uses `fly secrets` for environment variables (no .env files):
+### Fly.io
 ```bash
-fly secrets set DATABASE_URL="..."
-fly secrets set REDIS_URL="..."
-fly deploy
+fly logs            # ログ確認
+fly status          # 稼働状況
+fly dashboard       # メトリクス (ブラウザ)
 ```
 
-## Monitoring
+### Supabase
+- https://supabase.com/dashboard/project/[PROJECT_ID]
+- 接続数やクエリ状況をモニタリング
 
-### Fly.io Monitoring
-```bash
-# View logs
-fly logs
+### Upstash
+- https://console.upstash.com
+- コマンド使用量やレイテンシを確認 (無料枠は月 50 万コマンド)
 
-# Check app status
-fly status
+## トラブルシューティング
 
-# View metrics
-fly dashboard
-```
+- **DB 接続エラー**: プーリング接続を使用しているか、マイグレーションが完了しているか、Fly のシークレットが正しいか確認
+- **Redis 接続エラー**: Upstash のサービスステータスと URL を確認し、月間コマンド数が上限に達していないかチェック
+- **デプロイ失敗**: `fly logs -n 100` で詳細を確認し、必要に応じて `fly ssh console` で内部に入り調査。`fly secrets list` でシークレットセット状況も確認
 
-### Supabase Monitoring
-- Dashboard: https://supabase.com/dashboard/project/[PROJECT_ID]
-- Check database usage and connections
+## コスト管理
 
-### Upstash Monitoring
-- Dashboard: https://console.upstash.com
-- Monitor command usage (500K/month free tier)
+| サービス | 無料枠 | 備考 |
+|----------|--------|------|
+| Supabase | 500MB ストレージ / 50K MAU | 小規模なら十分 |
+| Upstash  | 256MB / 50 万コマンド | コマンド上限に注意 |
+| Fly.io   | 小型インスタンスで月 ~5USD | トラフィックに応じて増加 |
 
-## Troubleshooting
+**概算月額**: 0〜5 USD 程度 (無料枠内での運用を想定)
 
-### Database Connection Issues
-- Verify you're using the pooling connection (port 6432)
-- Check if migrations have been run
-- Verify credentials in Fly secrets
+## バックアップと復旧
 
-### Redis Connection Issues
-- Check Upstash dashboard for service status
-- Verify Redis URL format
-- Check monthly command limit
+- **Supabase**: 無料プランでも日次バックアップが自動取得。ダッシュボードから復元可能
+- **Upstash**: 必要に応じて REST API でエクスポートし、定期的にキャッシュのプリウォームを検討
 
-### Deployment Failures
-```bash
-# View detailed logs
-fly logs -n 100
+## セキュリティチェックリスト
 
-# SSH into container
-fly ssh console
+- [ ] 環境変数はすべて `fly secrets` 経由で設定 (リポジトリに含めない)
+- [ ] 本番ドメインに合わせて CORS を設定
+- [ ] データベースはプーリング接続を使用
+- [ ] Fly.io 側で HTTPS を強制
+- [ ] シークレット値を再利用せず、権限を最小化
 
-# Check secrets
-fly secrets list
-```
+## アプリケーション更新手順
 
-## Cost Management
-
-| Service | Free Tier | Notes |
-|---------|-----------|-------|
-| Supabase | 500MB storage, 50K MAU | Sufficient for small apps |
-| Upstash | 256MB, 500K commands/month | Monitor command usage |
-| Fly.io | ~$5/month for small instance | Scales with usage |
-
-**Estimated Monthly Cost**: $0-5
-
-## Backup and Recovery
-
-### Database Backup (Supabase)
-- Automatic daily backups on free tier
-- Access via Supabase dashboard
-
-### Redis Backup (Upstash)
-- Use REST API for data export if needed
-- Consider implementing periodic cache warming
-
-## Security Checklist
-
-- [ ] All secrets set via `fly secrets`, not in code
-- [ ] CORS configured correctly for production domain
-- [ ] Database using pooling connection
-- [ ] HTTPS enforced on Fly.io
-- [ ] Environment variables properly scoped
-
-## Updating the Application
-
-1. Make changes locally
-2. Test with production config
-3. Deploy:
+1. ローカルで変更を加える
+2. 必要に応じて本番設定でテスト
+3. デプロイ:
    ```bash
    fly deploy
    ```
-4. Monitor deployment:
+4. デプロイ監視:
    ```bash
    fly logs --tail
    ```
 
-## Rolling Back
+## ロールバック
 
-If deployment fails:
+デプロイに問題が起きた場合:
 ```bash
-# View releases
-fly releases
-
-# Rollback to previous version
-fly rollback [VERSION]
+fly releases      # 過去リリースを一覧
+fly rollback <VERSION>  # 指定したバージョンへロールバック
 ```

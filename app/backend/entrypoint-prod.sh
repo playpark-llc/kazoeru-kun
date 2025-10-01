@@ -8,3 +8,4 @@ trap 'kill -TERM $PID' TERM INT
 /app/backend &
 PID=$!
 wait $PID
+
