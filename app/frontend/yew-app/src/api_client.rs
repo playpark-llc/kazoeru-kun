@@ -55,7 +55,7 @@ impl ApiClient {
     }
 
     // セッションを送信（sessionクッキーのみ）
-    pub async fn send_session() -> Result<(), ApiError> {
+    pub async fn send_session() -> Result<u32, ApiError> {
 
         let request = Request::post(&format!("{}/{}", env::APP_API_ROOT, "session"))
             .credentials(web_sys::RequestCredentials::Include);
@@ -66,19 +66,28 @@ impl ApiClient {
             .map_err(|e| ApiError::NetworkError(e.to_string()))?;
 
         if response.ok() {
-            Ok(())
+            let json: Value = response
+                .json()
+                .await
+                .map_err(|e| ApiError::ParseError(e.to_string()))?;
+            let count = json
+                .get("result")
+                .and_then(|r| r.get("count"))
+                .and_then(|v| v.as_u64())
+                .unwrap_or(0) as u32;
+
+            Ok(count)
         } else {
             Err(ApiError::RequestFailed)
         }
     }
 
-    // セッションを送信（sessionクッキーのみ）
     pub async fn get_count_history() -> Result<u32, ApiError> {
         // 現在の日付を取得
         let now = Local::now();
-        let end_date = now - Duration::days(1);
+        let end_date = now;
         // 1週間前の日付を計算
-        let start_date = end_date - Duration::days(8);
+        let start_date = now - Duration::days(7);
         
         // YYYY-MM-DD形式でフォーマット
         let start_date_str = start_date.format("%Y-%m-%d").to_string();
