@@ -32,15 +32,15 @@ pub fn modal(props: &MemberModalProps) -> Html {
     };
     html! {
         <div class="fixed inset-0 flex items-center justify-center bg-gray-200 bg-opacity-75 z-10" onclick={on_click_outside}>
-            <div class="modal relative bg-blue-300 p-8 rounded-lg shadow-lg pb-[25px] w-[800px] h-[555px] grid grid-rows-1">
+            <div class="modal relative bg-blue-300 p-8 rounded-lg shadow-lg pb-[25px] w-5/6 lg:w-[800px] h-[555px] lg:grid lg:grid-rows-1 overflow-y-scroll lg:overflow-y-auto">
                 // 左側の画像プレースホルダー
-                <div class="grid grid-cols-[240px_352px] grid-rows-1 items-center px-4 gap-8 justify-center">
+                <div class="lg:grid lg:grid-cols-[240px_352px] lg:grid-rows-1 lg:items-center px-4 gap-8 justify-center">
                     <div class="bg-white p-2 border border-blue-400 text-center">
                         <img src={props.member.main_image.clone()} />
                     </div>
 
                     // 右側のコンテンツ
-                    <div class="ml-8 grid grid-rows-[2fr_1fr] gap-2 pb-[25px]">
+                    <div class="lg:ml-8 lg:grid lg:grid-rows-[2fr_1fr] gap-2 pb-[25px]">
                         <div class="space-y-4">
                             <h2 class="text-lg font-semibold">{&props.member.name}</h2>
                             <p class="text-sm text-gray-500">{&props.member.role}</p>
@@ -61,7 +61,7 @@ pub fn modal(props: &MemberModalProps) -> Html {
                 </div>
 
                 // 閉じるボタン
-                <div class="absolute bottom-0 right-0 flex justify-end mt-4">
+                <div class="lg:absolute lg:bottom-0 lg:right-0 flex justify-end mt-4">
                     <button onclick={&props.close_modal} class="p-2">
                         <svg xmlns="http://www.w3.org/2000/svg" width="50" height="50" viewBox="0 0 200 200">
                             <circle cx="100" cy="100" r="80" fill="none" stroke="white" stroke-width="5" />

@@ -39,7 +39,7 @@ pub fn MemberList() -> Html {
                 <span class="text-white text-lg">{"MENU"}</span>
             </div>
 
-            <div class="bg-blue-300 h-64 flex items-center justify-center">
+            <div class="bg-blue-300 h-[600px] flex items-center justify-center">
                 <img class="p-10" src="/images/main-logo.svg" alt="" />
             </div>
 
@@ -48,7 +48,7 @@ pub fn MemberList() -> Html {
                     <div class="mb-8">
                         <img src="/images/about.svg" />
                     </div>
-                    <div class="flex gap-8">
+                    <div class="flex flex-col md:flex-row gap-8">
                         <a href="">
                             <div class="relative max-w-xs border-[#6184C6]">
                                 <button class="w-full flex items-center justify-between rounded bg-white px-5 py-3 text-[#6184C6] shadow-md relative z-10 gap-4">
@@ -78,11 +78,11 @@ pub fn MemberList() -> Html {
                     </div>
                 </div>
 
-                <div class="py-8 pl-4 md:pl-8 xl:pr-8">
-                    <div class="mb-8">
+                <div class="py-8 md:pl-8 xl:pr-8">
+                    <div class="mb-8 pl-4 md:pl-0">
                         <img src="/images/member.svg" />
                     </div>
-                    <div class="overflow-x-scroll md:w-full flex xl:justify-center gap-8 overflow-y-hidden pb-4">
+                    <div class="overflow-x-scroll md:w-full flex gap-8 overflow-y-hidden pb-4 px-4 md:px-0">
                         {member_items.iter().map(|member| html! {
                             <div class="flex flex-col gap-2 min-w-[262px]">
                                 <MemberCard member={member.clone()} />
