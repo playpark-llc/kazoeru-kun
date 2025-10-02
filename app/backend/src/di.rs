@@ -97,8 +97,32 @@ impl DiContainer {
 
 /// データベース接続を作成
 async fn create_database_connection(url: &str) -> Result<DatabaseConnection, sea_orm::DbErr> {
+    use sea_orm::ConnectOptions;
+    use std::time::Duration;
+
     log::info!("Connecting to database...");
-    sea_orm::Database::connect(url).await
+
+    // PgBouncer transaction poolingとの互換性のため、prepared statementを無効化
+    // 接続URLにstatement-cache-capacity=0を追加
+    let url_with_options = if url.contains('?') {
+        format!("{}&statement-cache-capacity=0", url)
+    } else {
+        format!("{}?statement-cache-capacity=0", url)
+    };
+
+    let mut opt = ConnectOptions::new(url_with_options);
+    opt
+        // コネクションプール設定
+        .max_connections(100)
+        .min_connections(5)
+        .connect_timeout(Duration::from_secs(8))
+        .acquire_timeout(Duration::from_secs(8))
+        .idle_timeout(Duration::from_secs(8))
+        .max_lifetime(Duration::from_secs(8))
+        // SQLxログを無効化
+        .sqlx_logging(false);
+
+    sea_orm::Database::connect(opt).await
 }
 
 /// Redis接続プールを作成
