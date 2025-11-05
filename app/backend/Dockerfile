@@ -1,7 +1,7 @@
 # ======================================
 # Development Dockerfile with hot reload
 # ======================================
-FROM rust:1.83.0-slim-bullseye
+FROM rust:1.88.0-slim-bullseye
 
 # Install build dependencies and development tools
 RUN apt-get update && \
@@ -12,8 +12,9 @@ RUN apt-get update && \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Install development tools
-RUN cargo install cargo-watch cargo-make && \
+# Install development tools (pinned versions for reproducible builds)
+RUN cargo install cargo-watch --version 8.5.3 && \
+    cargo install cargo-make --version 0.37.24 && \
     cargo install --locked sea-orm-cli --version 1.1.0 && \
     rustup component add rustfmt clippy
 
