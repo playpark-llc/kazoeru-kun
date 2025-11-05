@@ -7,6 +7,7 @@ module.exports = {
   theme: {
     extend: {
       fontFamily: {
+        Pomeranian: ['Pomeranian', 'Helvetica', 'Arial', 'sans-serif'],
         DotGothic: ['"DotGothic16"', "sans-serif"],
         ZenKakuGothic: ['"Zen Kaku Gothic New"', "sans-serif"],
       },

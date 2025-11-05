@@ -257,9 +257,23 @@ pub fn Detail() -> Html {
                                 <img src="/images/sun.svg" />
                                 <img src="/images/main-text.svg" class="w-full"/>
                             </div>
-                            <a class="w-48 hover:-translate-y-1 active:translate-y-0 cursor-pointer" onclick={ push }>
-                                <img src={ status_state.image_url() } />
-                            </a>
+                            <div class="relative flex items-center hover:-translate-y-1 active:translate-y-0">
+                                <a class="w-48 cursor-pointer" onclick={ push }>
+                                    <img src={ status_state.image_url() } />
+                                </a>
+                                <div class="absolute -top-10 right-0">
+                                    <div class="relative w-[100px]">
+                                        <svg class="w-full" width="113" height="99" viewBox="0 0 113 99" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                            <path d="M61.0762 80.8855C61.0762 80.8855 75.8518 81.6249 85.7798 77.5071C93.5138 74.3008 101.432 70.4635 106.077 63.2796C108.602 59.3785 110.146 54.8591 111.066 50.2505C112.739 41.8428 112.291 32.753 108.498 25.1229C104.674 17.4291 97.724 11.756 90.0513 8.38393C82.3785 5.01829 73.9948 3.76892 65.6847 3.2781C54.7639 2.62792 43.6286 3.26535 33.2655 6.90509C22.9024 10.5448 13.3359 17.4419 7.77134 27.2328C2.20675 37.0238 1.14654 49.8553 6.42309 59.812C10.1798 66.9002 16.7372 72.0379 23.8339 75.359C30.9306 78.68 38.4808 81.2871 47.1524 81.0576C47.1524 81.0576 44.4192 94.705 37.0406 97.5416C37.0406 97.5416 55.0458 96.3433 61.0762 80.8855Z" fill="#6184C6" stroke="#6184C6" stroke-width="2"/>
+                                            <path d="M59.0945 78.8313C59.0945 78.8313 73.8701 79.5707 83.7981 75.4529C91.5321 72.2466 99.45 68.4093 104.095 61.2254C106.62 57.3243 108.165 52.8049 109.084 48.1963C110.757 39.7886 110.31 30.6988 106.516 23.0687C102.692 15.3749 95.7423 9.70175 88.0696 6.32973C80.3968 2.96409 72.0132 1.71472 63.703 1.2239C52.7822 0.573719 41.6469 1.21115 31.2838 4.85089C20.9207 8.49063 11.3542 15.3877 5.78965 25.1786C0.225061 34.9696 -0.835153 47.8011 4.4414 57.7578C8.19811 64.846 14.7555 69.9837 21.8522 73.3048C28.9489 76.6258 36.4991 79.2329 45.1708 79.0034C45.1708 79.0034 42.4375 92.6508 35.0589 95.4874C35.0589 95.4874 53.0641 94.2891 59.0945 78.8313Z" fill="white" stroke="#6184C6" stroke-width="2"/>
+                                        </svg>
+
+                                        <div class="absolute inset-0 flex items-center justify-center">
+                                            <p class="text-[45px] font-Pomeranian text-[#6184C6] pb-3.5 -tracking-[18px] pr-4 text-center">{ *daily_count }</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                         <div class="m-4 w-[232px] lg:w-2/3 text-center relative z-10 aspect-square">
                             <div class="h-full w-full border-2 border-[#6184C6] bg-white rounded flex flex-col p-4">
@@ -269,12 +283,6 @@ pub fn Detail() -> Html {
                                     <div class="mt-1">
                                         <span class="border-b-dashed border-b-pink-300 border-b">
                                             <span class="text-2xl font-bold text-[#6184C6]">{ *count }</span>
-                                            <span class="text-base">{"回"}</span>
-                                        </span>
-                                    </div>
-                                    <div class="mt-1">
-                                        <span class="border-b-dashed border-b-pink-300 border-b">
-                                            <span class="text-2xl font-bold text-[#6184C6]">{ *daily_count }</span>
                                             <span class="text-base">{"回"}</span>
                                         </span>
                                     </div>
