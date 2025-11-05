@@ -23,6 +23,7 @@ services:
 
   frontend:
     build: ./app/frontend
+    command: sh -c "npm run dev"
     tty: true
     working_dir: /opt/app/frontend/yew-app
     volumes:
