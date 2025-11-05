@@ -116,7 +116,7 @@ pub async fn get_history(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::sea_generated::sea_orm_active_enums::Status;
+    use crate::sea_generated::sea_orm_active_enums::StatusEnum as Status;
     use chrono::{NaiveDate, Utc};
     use sea_orm::prelude::Decimal;
 

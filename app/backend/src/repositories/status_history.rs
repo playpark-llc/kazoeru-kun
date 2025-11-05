@@ -6,7 +6,7 @@ use sea_orm::{
 };
 use std::sync::Arc;
 
-use crate::sea_generated::{prelude::StatusHistory, sea_orm_active_enums::Status, status_history};
+use crate::sea_generated::{prelude::StatusHistory, sea_orm_active_enums::StatusEnum as Status, status_history};
 
 use super::{RepositoryError, Result};
 
@@ -67,8 +67,8 @@ impl DbStatusHistoryRepository {
             end_date: entity.end_date.date(),
             count: entity.count,
             status: entity.status,
-            created_at: Local.from_utc_datetime(&entity.created_at.naive_utc()),
-            updated_at: Local.from_utc_datetime(&entity.updated_at.naive_utc()),
+            created_at: Local.from_utc_datetime(&entity.created_at.and_utc().naive_utc()),
+            updated_at: Local.from_utc_datetime(&entity.updated_at.and_utc().naive_utc()),
         }
     }
 }
@@ -185,7 +185,9 @@ mod tests {
     use sea_orm::Database;
 
     async fn create_test_db() -> DatabaseConnection {
-        Database::connect("mysql://user:password@localhost/test_db")
+        let test_database_url = std::env::var("TEST_DATABASE_URL")
+            .unwrap_or_else(|_| "postgresql://postgres:test@localhost/test_db".to_string());
+        Database::connect(test_database_url)
             .await
             .unwrap()
     }

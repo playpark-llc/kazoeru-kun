@@ -23,8 +23,7 @@ impl MigrationTrait for Migration {
                     )
                     .col(
                         timestamp(SessionCounter::UpdatedAt)
-                            .default(SimpleExpr::Keyword(Keyword::CurrentTimestamp))
-                            .extra("on update CURRENT_TIMESTAMP"),
+                            .default(SimpleExpr::Keyword(Keyword::CurrentTimestamp)),
                     )
                     .to_owned(),
             )

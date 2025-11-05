@@ -1,4 +1,4 @@
-use crate::sea_generated::sea_orm_active_enums::Status;
+use crate::sea_generated::sea_orm_active_enums::StatusEnum as Status;
 use chrono::{Datelike, Duration, NaiveDate, TimeZone, Weekday};
 use chrono_tz::Asia::Tokyo;
 

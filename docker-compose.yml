@@ -2,7 +2,6 @@ services:
   back:
     build: ./app/backend
     command: sh -c "cargo watch -x 'run'"
-    # command: sh -c
     tty: true
     working_dir: /backend
     env_file:
@@ -24,7 +23,6 @@ services:
 
   frontend:
     build: ./app/frontend
-    # command: sh -c "npm run dev"
     tty: true
     working_dir: /opt/app/frontend/yew-app
     volumes:
@@ -42,48 +40,24 @@ services:
       - 6380:6379
 
   db:
-    image: mysql:8.3.0
-    command: --default-authentication-plugin=mysql_native_password
+    image: postgres:16-alpine
     restart: always
     environment:
-      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD:-admin_password}
-      - MYSQL_DATABASE=KazoeruKun
-      - MYSQL_USER=admin
-      - MYSQL_PASSWORD=${MYSQL_PASSWORD:-password}
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-admin_password}
+      - POSTGRES_DB=kazoerukun
       - TZ=Asia/Tokyo
     volumes:
-      - ./mysql/store:/var/lib/mysql
-      - type: bind
-        source: ./mysql/conf
-        target: /etc/mysql/conf.d
+      - ./postgres-data:/var/lib/postgresql/data
     ports:
-      - 7776:3306
+      - 5432:5432
     tty: true
     healthcheck:
-      test:
-        [
-          "CMD",
-          "mysqladmin",
-          "ping",
-          "-h",
-          "localhost",
-          "-u",
-          "root",
-          "-p$MYSQL_ROOT_PASSWORD",
-        ]
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 30s
       timeout: 5s
       retries: 6
       start_period: 3s
-
-  cron:
-    build: ./cron
-    tty: true
-    working_dir: /cron
-    volumes:
-      - type: bind
-        source: ./cron
-        target: /cron
 
   tbls: # create table documents when db healthcheck passed
     image: ghcr.io/k1low/tbls
@@ -97,6 +71,8 @@ services:
     entrypoint: >
       tbls doc -f --rm-dist
     tty: true
+
+  # Note: Cron service removed as it's now integrated into the backend via tokio::spawn
 
 volumes:
   pnpm_store_frontend:

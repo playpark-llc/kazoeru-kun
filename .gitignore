@@ -1,15 +1,20 @@
 .env
+.env.*
+!.env.example
+!.env.*.example
 target
 app/backend/prisma-cli/target
 app/backend/src/prisma.rs
 app/frontend/node_modules
 redis-data
 mysql/store
+postgres-data/
 
 app/frontend/yew-app/node_modules
 app/frontend/yew-app/target
 app/frontend/yew-app/dist
 app/frontend/yew-app/src/env.rs
 app/frontend/yew-app/static/css/tailwind.css
+app/frontend/yew-app/tailwind.css
 *.DS_Store
 SPEC.md
