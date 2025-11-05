@@ -1,9 +1,19 @@
 use yew::prelude::*;
 use wasm_bindgen_futures::spawn_local;
 use gloo::console::error;
+use web_sys::window;
+use web_sys::Storage;
 
 use crate::models::status::Status;
 use crate::api_client::ApiClient;
+
+fn get_session_storage() -> Result<Storage, String> {
+    window()
+        .ok_or("Window not available")?
+        .session_storage()
+        .map_err(|_| "Failed to access sessionStorage")?
+        .ok_or("SessionStorage not available".to_string())
+}
 
 #[function_component]
 pub fn PushAfter() -> Html {
@@ -29,9 +39,13 @@ pub fn PushAfter() -> Html {
 
     let push = {
         move |_| {
+            let storage = get_session_storage().unwrap();
             spawn_local(async move {
                 match ApiClient::send_session().await {
-                    Ok(_) => {}
+                    Ok(click_count) => {
+                        let json_string = serde_json::to_string(&click_count).unwrap();
+                        storage.set_item("kazoerukun_count", &json_string).unwrap();
+                    }
                     Err(e) => {
                         error!("Failed to send session: {}", e.to_string());
                     }
