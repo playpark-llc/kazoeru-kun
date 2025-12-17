@@ -28,6 +28,7 @@ services:
     working_dir: /opt/app/frontend/yew-app
     volumes:
       - ./app/frontend:/opt/app/frontend
+      - frontend_dist:/opt/app/frontend/yew-app/dist
     ports:
       - 3001:8080
     depends_on:
@@ -78,6 +79,7 @@ services:
 volumes:
   pnpm_store_frontend:
   node_modules_frontend:
+  frontend_dist:
   target_backend:
   target_migration:
   cargo-registry:

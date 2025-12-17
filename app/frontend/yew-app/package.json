@@ -5,8 +5,8 @@
   "scripts": {
     "dev": "npm run dev:css & npm run dev:serve",
     "dev:css": "tailwindcss -i ./static/css/app.css -o ./static/css/tailwind.css --watch",
-    "dev:serve": "cargo clean && trunk serve --address 0.0.0.0",
-    "prod": "npm run prod:css && trunk build --release",
+    "dev:serve": "sh ./scripts/ensure-writable-dir.sh ./dist && cargo clean && trunk serve --address 0.0.0.0",
+    "prod": "sh ./scripts/ensure-writable-dir.sh ./dist && npm run prod:css && trunk build --release",
     "prod:css": "mkdir -p ./static/css && tailwindcss -c tailwind.config.js -o ./static/css/tailwind.css --minify",
     "deploy": "npx wrangler pages deploy",
     "build:deploy": "npm run prod && npm run deploy",
