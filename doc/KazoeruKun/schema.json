@@ -1,1 +1,172 @@
-{"name":"kazoerukun","tables":[{"name":"public.session_counter","type":"BASE TABLE","columns":[{"name":"id","type":"integer","nullable":false,"default":"nextval('session_counter_id_seq'::regclass)"},{"name":"session_id","type":"varchar","nullable":false},{"name":"count","type":"integer","nullable":false},{"name":"created_at","type":"timestamp without time zone","nullable":false,"default":"CURRENT_TIMESTAMP"},{"name":"updated_at","type":"timestamp without time zone","nullable":false,"default":"CURRENT_TIMESTAMP"}],"indexes":[{"name":"session_counter_pkey","def":"CREATE UNIQUE INDEX session_counter_pkey ON public.session_counter USING btree (id)","table":"public.session_counter","columns":["id"]},{"name":"session_counter_session_id_key","def":"CREATE UNIQUE INDEX session_counter_session_id_key ON public.session_counter USING btree (session_id)","table":"public.session_counter","columns":["session_id"]}],"constraints":[{"name":"session_counter_pkey","type":"PRIMARY KEY","def":"PRIMARY KEY (id)","table":"public.session_counter","referenced_table":"","columns":["id"]},{"name":"session_counter_session_id_key","type":"UNIQUE","def":"UNIQUE (session_id)","table":"public.session_counter","referenced_table":"","columns":["session_id"]}]},{"name":"public.status_history","type":"BASE TABLE","columns":[{"name":"id","type":"integer","nullable":false,"default":"nextval('count_summary_id_seq'::regclass)"},{"name":"start_date","type":"timestamp without time zone","nullable":false},{"name":"end_date","type":"timestamp without time zone","nullable":false},{"name":"count","type":"numeric","nullable":false},{"name":"created_at","type":"timestamp without time zone","nullable":false,"default":"CURRENT_TIMESTAMP"},{"name":"updated_at","type":"timestamp without time zone","nullable":false,"default":"CURRENT_TIMESTAMP"},{"name":"status","type":"status_enum","nullable":false,"default":"'CLEAN'::status_enum"}],"indexes":[{"name":"count_summary_pkey","def":"CREATE UNIQUE INDEX count_summary_pkey ON public.status_history USING btree (id)","table":"public.status_history","columns":["id"]}],"constraints":[{"name":"count_summary_pkey","type":"PRIMARY KEY","def":"PRIMARY KEY (id)","table":"public.status_history","referenced_table":"","columns":["id"]}]}],"enums":[{"name":"public.status_enum","values":["CLEAN","DIRTY","IMMACULATE","SPOTLESS","UNCLEAN"]}],"driver":{"name":"postgres","database_version":"PostgreSQL 16.10 on aarch64-unknown-linux-musl, compiled by gcc (Alpine 14.2.0) 14.2.0, 64-bit","meta":{"current_schema":"public","search_paths":["postgres","public"],"dict":{"Functions":"Stored procedures and functions"}}}}
+{
+  "name": "kazoerukun",
+  "tables": [
+    {
+      "name": "public.session_counter",
+      "type": "BASE TABLE",
+      "columns": [
+        {
+          "name": "id",
+          "type": "integer",
+          "nullable": false,
+          "default": "nextval('session_counter_id_seq'::regclass)"
+        },
+        {
+          "name": "session_id",
+          "type": "varchar",
+          "nullable": false
+        },
+        {
+          "name": "count",
+          "type": "integer",
+          "nullable": false
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp without time zone",
+          "nullable": false,
+          "default": "CURRENT_TIMESTAMP"
+        },
+        {
+          "name": "updated_at",
+          "type": "timestamp without time zone",
+          "nullable": false,
+          "default": "CURRENT_TIMESTAMP"
+        }
+      ],
+      "indexes": [
+        {
+          "name": "session_counter_pkey",
+          "def": "CREATE UNIQUE INDEX session_counter_pkey ON public.session_counter USING btree (id)",
+          "table": "public.session_counter",
+          "columns": [
+            "id"
+          ]
+        },
+        {
+          "name": "session_counter_session_id_key",
+          "def": "CREATE UNIQUE INDEX session_counter_session_id_key ON public.session_counter USING btree (session_id)",
+          "table": "public.session_counter",
+          "columns": [
+            "session_id"
+          ]
+        }
+      ],
+      "constraints": [
+        {
+          "name": "session_counter_pkey",
+          "type": "PRIMARY KEY",
+          "def": "PRIMARY KEY (id)",
+          "table": "public.session_counter",
+          "referenced_table": "",
+          "columns": [
+            "id"
+          ]
+        },
+        {
+          "name": "session_counter_session_id_key",
+          "type": "UNIQUE",
+          "def": "UNIQUE (session_id)",
+          "table": "public.session_counter",
+          "referenced_table": "",
+          "columns": [
+            "session_id"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "public.status_history",
+      "type": "BASE TABLE",
+      "columns": [
+        {
+          "name": "id",
+          "type": "integer",
+          "nullable": false,
+          "default": "nextval('count_summary_id_seq'::regclass)"
+        },
+        {
+          "name": "start_date",
+          "type": "timestamp without time zone",
+          "nullable": false
+        },
+        {
+          "name": "end_date",
+          "type": "timestamp without time zone",
+          "nullable": false
+        },
+        {
+          "name": "count",
+          "type": "numeric",
+          "nullable": false
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp without time zone",
+          "nullable": false,
+          "default": "CURRENT_TIMESTAMP"
+        },
+        {
+          "name": "updated_at",
+          "type": "timestamp without time zone",
+          "nullable": false,
+          "default": "CURRENT_TIMESTAMP"
+        },
+        {
+          "name": "status",
+          "type": "status_enum",
+          "nullable": false,
+          "default": "'CLEAN'::status_enum"
+        }
+      ],
+      "indexes": [
+        {
+          "name": "count_summary_pkey",
+          "def": "CREATE UNIQUE INDEX count_summary_pkey ON public.status_history USING btree (id)",
+          "table": "public.status_history",
+          "columns": [
+            "id"
+          ]
+        }
+      ],
+      "constraints": [
+        {
+          "name": "count_summary_pkey",
+          "type": "PRIMARY KEY",
+          "def": "PRIMARY KEY (id)",
+          "table": "public.status_history",
+          "referenced_table": "",
+          "columns": [
+            "id"
+          ]
+        }
+      ]
+    }
+  ],
+  "enums": [
+    {
+      "name": "public.status_enum",
+      "values": [
+        "CLEAN",
+        "DIRTY",
+        "IMMACULATE",
+        "SPOTLESS",
+        "UNCLEAN"
+      ]
+    }
+  ],
+  "driver": {
+    "name": "postgres",
+    "database_version": "PostgreSQL 16.11 on aarch64-unknown-linux-musl, compiled by gcc (Alpine 15.2.0) 15.2.0, 64-bit",
+    "meta": {
+      "current_schema": "public",
+      "search_paths": [
+        "postgres",
+        "public"
+      ],
+      "dict": {
+        "Functions": "Stored procedures and functions"
+      }
+    }
+  }
+}
