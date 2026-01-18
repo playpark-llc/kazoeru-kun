@@ -4,143 +4,47 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Kazoeru-kun (カウントくん) is a click counter application with a Rust-based microservices architecture. It features:
-- **Backend**: Rust with Rocket framework (API server with integrated cron jobs)
+Kazoeru-kun (カウントくん) is a click counter application with a Rust-based microservices architecture.
+
+- **Backend**: Rust with Rocket framework
 - **Frontend**: Rust with Yew framework (WebAssembly)
-- **Storage**: Redis for session cache, PostgreSQL for persistent data
-- **Infrastructure**: Docker Compose for local development
+- **Storage**: Redis (session cache) + PostgreSQL (persistent data)
 
-## Architecture
+## Documentation
 
-### Service Architecture
-The system consists of 4 Docker services:
-1. **backend** (`back`): Rocket API server with integrated cron jobs for scheduled tasks
-2. **frontend** (`front`): Yew WebAssembly application served via Trunk
-3. **redis**: Session-based click counter cache with TTL
-4. **postgres** (`db`): Persistent storage for aggregated counts (PostgreSQL 16 Alpine)
+| Document | Contents |
+|----------|----------|
+| [doc/architecture.md](./doc/architecture.md) | Service architecture, API endpoints, data flow, cron jobs |
+| [doc/development.md](./doc/development.md) | Development commands, testing, build configuration |
+| [doc/environment.md](./doc/environment.md) | Environment variables |
+| [doc/production.md](./doc/production.md) | Production infrastructure, deployment |
+| [doc/KazoeruKun/README.md](./doc/KazoeruKun/README.md) | Database schema definition |
 
-### Data Flow
-1. User clicks → Frontend calls `POST /session` → Redis increments counter
-2. Backend internal cron job (every 60 seconds via tokio::spawn) → Syncs Redis to PostgreSQL
-3. Frontend loads → Calls `GET /session_counter` → Displays total from PostgreSQL
+## Quick Start
 
-### API Endpoints
-- `POST /session`: Increment click count for session (Redis)
-- `PUT /session`: Sync Redis counts to PostgreSQL (called by internal cron job)
-- `GET /session_counter?start_date=yyyy-mm-dd&end_date=yyyy-mm-dd`: Get aggregated counts
-- `PUT /status_history`: Update weekly status history (called by internal cron job)
-- `GET /status_history?limit=<n>&offset=<n>&start_date=yyyy-mm-dd&end_date=yyyy-mm-dd`: Get status history
-- `GET /health`: System health check (PostgreSQL and Redis connectivity)
-- `GET /health/liveness`: Kubernetes liveness probe
-- `GET /health/readiness`: Kubernetes readiness probe
-
-## Development Commands
-
-### Start Development Environment
 ```bash
-# Start all services
 docker compose up -d
-
-# Access application
 # Frontend: http://localhost:3001
-# Backend API: http://localhost:8881
-# PostgreSQL: localhost:5432 (user: postgres, db: kazoerukun)
-# Redis: localhost:6380
+# Backend: http://localhost:8881
 ```
 
-### Backend Development (Rust/Rocket)
-```bash
-# Connect to backend container
-docker compose exec back sh
+## Rules
 
-# Run backend server with hot reload
-cargo watch -x 'run'
+### Code Style
+- Follow existing patterns in the codebase
+- Use sea-orm for database operations
+- Use Rocket framework conventions for API endpoints
 
-# Run migrations
-cd migration && sea-orm-cli migrate up
+### Git Workflow
+- Main branch: `dev`
+- Create feature branches for all work
+- PR to `main` triggers preview deploy, merge triggers production deploy
 
-# Generate entity files from database
-cargo make gen-entity
-```
+### API Design
+- All API endpoints defined in `app/backend/src/routes/`
+- Use appropriate HTTP methods (GET for read, POST for create, PUT for update)
+- Return proper status codes and JSON responses
 
-### Frontend Development (Rust/Yew)
-```bash
-# Connect to frontend container
-docker compose exec frontend sh
-
-# Run development server (includes Tailwind CSS watch)
-npm run dev
-
-# Build for production
-npm run prod
-
-# Individual commands
-npm run dev:css    # Watch Tailwind CSS changes
-npm run dev:serve  # Run Trunk dev server
-```
-
-### Database Management
-```bash
-# Access PostgreSQL
-docker compose exec db psql -U postgres -d kazoerukun
-
-# Generate database documentation (automatic on db health check)
-docker compose run --rm tbls
-```
-
-## Testing
-
-```bash
-# Backend tests
-docker compose exec back cargo test
-
-# Frontend tests
-docker compose exec frontend cargo test
-```
-
-## Environment Variables
-
-### Backend (.env)
-- `DATABASE_URL`: PostgreSQL connection string
-- `ALLOWED_ORIGINS`: CORS allowed origins
-- `REDIS_URL`: Redis connection string (default: redis://redis:6379)
-- `TARGET_VALUE`: Target value for weekly status calculation (default: 10)
-- `SYNC_JOB_INTERVAL_SECS`: Redis to PostgreSQL sync interval in seconds (default: 60)
-- `STATUS_HISTORY_JOB_INTERVAL_SECS`: Status history update interval in seconds (default: 86400)
-
-### Frontend (.env)
-- `APP_API_ROOT`: Backend API URL (default: http://localhost:8881)
-
-## Key Implementation Details
-
-### Session Management
-- Sessions use cookies with expiration timestamps
-- Redis keys have TTL matching cookie expiration
-- New sessions get generated UUID and expiration
-
-### Database Schema
-- `session_counter`: Stores session_id and count
-- `status_history`: Status tracking with date ranges (formerly count_summary)
-- Migrations in `app/backend/migration/src/`
-
-### CORS Configuration
-- Configured via `ALLOWED_ORIGINS` environment variable
-- Default allows `http://localhost:3001`
-
-### Build Configuration
-- Backend uses cargo with sea-orm for database ORM
-- Frontend uses Trunk for WASM bundling and serving
-- Tailwind CSS for styling (compiled via npm scripts)
-
-### Cron Jobs (Integrated in Backend)
-- **Sync Job**: Syncs Redis counters to PostgreSQL
-  - Interval: Configured via `SYNC_JOB_INTERVAL_SECS` env variable (default: 60 seconds)
-  - Implemented in `app/backend/src/cron/jobs/sync.rs`
-  - Called internally via `PUT /session` endpoint
-- **Status History Job**: Updates weekly status history
-  - Interval: Configured via `STATUS_HISTORY_JOB_INTERVAL_SECS` env variable (default: 86400 seconds/24 hours)
-  - Implemented in `app/backend/src/cron/jobs/status_history.rs`
-  - Called internally via `PUT /status_history` endpoint
-- Both jobs are managed via tokio::spawn with automatic retry logic
-- Configuration in `app/backend/src/cron/config.rs`
-- Minimum interval validation: 1 second (prevents excessive load)
+### Testing
+- Run `cargo test` before committing backend changes
+- Ensure Docker services are running for integration tests
