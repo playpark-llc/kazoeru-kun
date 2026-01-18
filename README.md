@@ -87,6 +87,21 @@ localhost:3001
 - **ステータス履歴ジョブ**: 24時間ごとに週次ステータスを更新
 - 両ジョブとも自動リトライロジック付き
 
+## 本番環境構成
+
+| コンポーネント | サービス | リージョン |
+|--------------|---------|----------|
+| Frontend | Cloudflare Pages | Edge (グローバル) |
+| Backend | Fly.io | nrt (東京) |
+| PostgreSQL | Neon | - |
+| Redis | Upstash | - |
+
+### デプロイ
+- **PR作成時**: Frontendのプレビューデプロイ（Cloudflare Pages）
+- **mainマージ時**: Backend（Fly.io）+ Frontend（Cloudflare Pages）の本番デプロイ
+
+詳細は [doc/production.md](./doc/production.md) を参照。
+
 ## シーケンス図
 
 ### ユーザ操作系
