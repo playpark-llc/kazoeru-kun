@@ -60,6 +60,8 @@ jobs:
 
       - name: Build
         run: npm run prod
+        env:
+          APP_API_ROOT: ${{ secrets.APP_API_ROOT }}
 
       - name: Deploy Preview to Cloudflare Pages
         uses: cloudflare/wrangler-action@v3
@@ -133,6 +135,8 @@ jobs:
 
       - name: Build
         run: npm run prod
+        env:
+          APP_API_ROOT: ${{ secrets.APP_API_ROOT }}
 
       - name: Deploy to Cloudflare Pages (Production)
         uses: cloudflare/wrangler-action@v3
