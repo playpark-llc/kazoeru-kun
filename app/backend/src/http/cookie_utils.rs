@@ -1,5 +1,5 @@
 use rocket::{
-    http::{Cookie, CookieJar},
+    http::{Cookie, CookieJar, SameSite},
     time::OffsetDateTime,
 };
 
@@ -32,10 +32,15 @@ pub fn set_session_cookie(
     // Cookieを作成し、有効期限を設定
     let mut cookie = Cookie::new("session", session_id.to_string());
     cookie.set_expires(offset_expiration);
-    
+    // クロスサイトリクエスト（異なるドメイン間）でCookieを送受信するための設定
+    // SameSite=None: クロスサイトでも送信可能
+    // Secure: HTTPS必須（SameSite=Noneの必須要件）
+    cookie.set_same_site(SameSite::None);
+    cookie.set_secure(true);
+
     // デバッグログ出力
     log::debug!("Setting session cookie: id={}, expires={:?}", session_id, offset_expiration);
-    
+
     cookies.add(cookie);
 }
 
