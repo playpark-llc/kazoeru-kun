@@ -1,0 +1,44 @@
+# fly.toml app configuration file generated for kazoeru-kun on 2025-10-02T07:06:37+09:00
+#
+# See https://fly.io/docs/reference/configuration/ for information about how to use this file.
+#
+
+app = 'kazoeru-kun'
+primary_region = 'nrt'
+kill_signal = 'SIGINT'
+kill_timeout = '5s'
+
+[build]
+  dockerfile = 'Dockerfile.prod'
+
+[env]
+  ROCKET_ADDRESS = '0.0.0.0'
+  ROCKET_PORT = '8080'
+  ROCKET_PROFILE = 'production'
+  RUST_BACKTRACE = '1'
+  RUST_LOG = 'info'
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = 'stop'
+  auto_start_machines = true
+  min_machines_running = 0
+  processes = ['app']
+
+  [http_service.concurrency]
+    type = 'connections'
+    hard_limit = 25
+    soft_limit = 20
+
+  [[http_service.checks]]
+    interval = '15s'
+    timeout = '5s'
+    grace_period = '30s'
+    method = 'GET'
+    path = '/health/liveness'
+
+[[vm]]
+  memory = '1gb'
+  cpu_kind = 'shared'
+  cpus = 1

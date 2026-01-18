@@ -1,70 +1,51 @@
-use async_std::task;
-use redis::{AsyncCommands, Client};
-use std::time::{SystemTime, UNIX_EPOCH};
-use tide::http::headers::HeaderValue;
-use tide::security::{CorsMiddleware, Origin};
-use tide::{Request, Server};
+use opt::config::AppConfig;
+use opt::di::DiContainer;
+use opt::routes::configure_routes;
+use std::sync::Arc;
 
-async fn count_records(req: Request<Client>) -> tide::Result<String> {
-    let now = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap()
-        .as_millis();
+mod cron;
+use cron::{spawn_status_history_cron_job, spawn_sync_cron_job};
 
-    let redis_client = req.state();
-    let mut con = redis_client.get_async_connection().await.unwrap();
+#[macro_use]
+extern crate rocket;
 
-    let _: () = con
-        .zadd("timestamps", now as f64, now as f64)
+#[launch]
+async fn rocket() -> _ {
+    // Initialize logger
+    env_logger::init();
+    log::info!("Starting Kazoeru-kun application...");
+
+    // Load configuration
+    let app_config = AppConfig::from_env().expect("Failed to load configuration");
+
+    // Build dependency injection container
+    let container = DiContainer::build(app_config)
         .await
-        .unwrap();
+        .expect("Failed to build dependency injection container");
 
-    let one_second_ago = now - 1000;
+    // Start cron jobs
+    spawn_sync_cron_job(container.sync_service.clone());
+    spawn_status_history_cron_job(container.status_service.clone(), Arc::new(container.config.clone()));
 
-    let count: isize = con
-        .zcount("timestamps", one_second_ago as f64, now as f64)
-        .await
-        .unwrap();
+    // Get CORS configuration
+    let cors = container.get_cors().expect("Failed to configure CORS");
 
-    Ok(format!("Number of records in the last second: {}", count))
-}
-
-async fn cleanup_records(req: Request<Client>) -> tide::Result<String> {
-    let now = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap()
-        .as_millis();
-    let two_seconds_ago = now - 2000;
-
-    let redis_client = req.state();
-    let mut con = redis_client.get_async_connection().await.unwrap();
-
-    let removed: isize = con
-        .zrembyscore("timestamps", 0, two_seconds_ago as f64)
-        .await
-        .unwrap();
-
-    Ok(format!("Removed {} records order than 2 seconds", removed))
-}
-
-async fn run_server(redis_client: Client) -> tide::Result<()> {
-    let mut app = Server::with_state(redis_client);
-
-    let cors = CorsMiddleware::new()
-        .allow_methods("GET, POST, OPTIONS".parse::<HeaderValue>().unwrap())
-        .allow_origin(Origin::from("http://localhost:3000"))
-        .allow_credentials(false);
-
-    app.with(cors);
-
-    app.at("/count").get(count_records);
-    app.at("/cleanup").post(cleanup_records);
-
-    app.listen("0.0.0.0:8080").await?;
-    Ok(())
-}
-
-fn main() {
-    let redis_client = Client::open("redis://redis:6379/").unwrap();
-    let _ = task::block_on(run_server(redis_client));
+    // Build and configure Rocket application
+    rocket::build()
+        // Manage services for handler injection
+        .manage(container.session_service.clone())
+        .manage(container.status_service.clone())
+        .manage(container.sync_service.clone())
+        .manage(container.health_service.clone())
+        // Manage repositories for direct access if needed
+        .manage(container.session_repo.clone())
+        .manage(container.counter_repo.clone())
+        .manage(container.history_repo.clone())
+        // Manage infrastructure components
+        .manage(container.redis_pool.clone())
+        .manage(container.db.clone())
+        .manage(container.config.clone())
+        // Mount routes and attach CORS
+        .mount("/", configure_routes())
+        .attach(cors)
 }

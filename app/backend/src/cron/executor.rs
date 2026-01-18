@@ -1,0 +1,95 @@
+use super::config::CronJobConfig;
+use std::future::Future;
+use std::time::Duration;
+
+/// Generic function to spawn a cron job with retry logic
+pub fn spawn_cron_job<F, Fut>(config: CronJobConfig, task: F)
+where
+    F: Fn() -> Fut + Send + 'static,
+    Fut: Future<Output = Result<String, Box<dyn std::error::Error + Send + Sync>>> + Send,
+{
+    tokio::spawn(async move {
+        // Validate interval (minimum 1 second to prevent excessive load)
+        let validated_interval = if config.interval_secs < 1 {
+            log::warn!(
+                "Cron job '{}' interval too short ({}s), using minimum 1s",
+                config.name, config.interval_secs
+            );
+            1
+        } else {
+            config.interval_secs
+        };
+
+        // Handle initial delay if specified
+        if let Some(delay) = config.initial_delay {
+            log::info!(
+                "Starting cron job '{}' with initial delay: {:?}",
+                config.name,
+                delay
+            );
+            tokio::time::sleep(delay).await;
+        } else {
+            log::info!(
+                "Starting cron job '{}' (interval: {} seconds)",
+                config.name,
+                validated_interval
+            );
+        }
+
+        // Create interval timer
+        let mut interval = tokio::time::interval(Duration::from_secs(validated_interval));
+
+        loop {
+            interval.tick().await;
+            log::info!("Running scheduled task: {}", config.name);
+
+            let mut retry_count = 0;
+            loop {
+                match task().await {
+                    Ok(message) => {
+                        log::info!("{}: {}", config.name, message);
+                        break;
+                    }
+                    Err(e) if retry_count < config.max_retries => {
+                        retry_count += 1;
+                        log::warn!(
+                            "{} failed (attempt {}/{}): {:?}",
+                            config.name,
+                            retry_count,
+                            config.max_retries,
+                            e
+                        );
+                        tokio::time::sleep(Duration::from_secs(config.retry_delay_secs)).await;
+                    }
+                    Err(e) => {
+                        log::error!(
+                            "{} failed after {} attempts: {:?}",
+                            config.name,
+                            config.max_retries,
+                            e
+                        );
+
+                        // Log critical failure for monitoring systems to pick up
+                        log::error!(
+                            "CRON_JOB_CRITICAL_FAILURE: job_name={} max_retries_exceeded={} error_type={}",
+                            config.name,
+                            config.max_retries,
+                            std::any::type_name_of_val(&*e)
+                        );
+
+                        // Additional structured logging for observability
+                        log::error!(
+                            "{{\"event\": \"cron_job_failure\", \"job_name\": \"{}\", \"retry_count\": {}, \"max_retries\": {}, \"error\": \"{}\"}}",
+                            config.name,
+                            retry_count,
+                            config.max_retries,
+                            e
+                        );
+
+                        break;
+                    }
+                }
+            }
+        }
+    });
+}

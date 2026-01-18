@@ -1,0 +1,147 @@
+name: Deploy
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: 0
+  RUST_BACKTRACE: short
+
+jobs:
+  # Frontend Preview on PR
+  preview-frontend:
+    name: Frontend Preview
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: app/frontend/yew-app
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: app/frontend/yew-app/package-lock.json
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: app/frontend/yew-app -> target
+          cache-on-failure: true
+          shared-key: frontend-wasm
+
+      - name: Cache trunk binary
+        uses: actions/cache@v4
+        id: trunk-cache
+        with:
+          path: ~/.cargo/bin/trunk
+          key: trunk-${{ runner.os }}-v0.21
+
+      - name: Install trunk
+        if: steps.trunk-cache.outputs.cache-hit != 'true'
+        run: cargo install trunk --locked
+
+      - name: Install npm dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run prod
+        env:
+          APP_API_ROOT: ${{ secrets.APP_API_ROOT }}
+
+      - name: Deploy Preview to Cloudflare Pages
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: app/frontend/yew-app
+          command: pages deploy dist --project-name=kazoeru-kun --branch=${{ github.head_ref }}
+
+  # Production deploy on merge to main
+  deploy-backend:
+    name: Deploy Backend (Production)
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: app/backend
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Fly.io CLI
+        uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: Deploy to Fly.io
+        run: flyctl deploy --remote-only
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+
+  deploy-frontend:
+    name: Deploy Frontend (Production)
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: app/frontend/yew-app
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: app/frontend/yew-app/package-lock.json
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: app/frontend/yew-app -> target
+          cache-on-failure: true
+          shared-key: frontend-wasm
+
+      - name: Cache trunk binary
+        uses: actions/cache@v4
+        id: trunk-cache
+        with:
+          path: ~/.cargo/bin/trunk
+          key: trunk-${{ runner.os }}-v0.21
+
+      - name: Install trunk
+        if: steps.trunk-cache.outputs.cache-hit != 'true'
+        run: cargo install trunk --locked
+
+      - name: Install npm dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run prod
+        env:
+          APP_API_ROOT: ${{ secrets.APP_API_ROOT }}
+
+      - name: Deploy to Cloudflare Pages (Production)
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: app/frontend/yew-app
+          command: pages deploy dist --project-name=kazoeru-kun --branch=main

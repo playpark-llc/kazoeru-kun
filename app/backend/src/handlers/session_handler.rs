@@ -1,0 +1,203 @@
+use crate::http::cookie_utils::set_session_cookie;
+use crate::models::response::{ErrorResponse, Response, SessionCount, SessionCounterSummary};
+use crate::repositories::SessionCounterRepository;
+use crate::services::{SessionService, SyncService};
+use crate::{get_date_range_local, DateRange};
+use rocket::{get, http::CookieJar, post, put, serde::json::Json, State};
+use std::sync::Arc;
+
+/// POST /session - セッションのクリックカウンタをインクリメント
+#[post("/session")]
+pub async fn create_session(
+    session_service: &State<Arc<SessionService>>,
+    cookies: &CookieJar<'_>,
+) -> Result<Json<Response<SessionCount>>, Json<ErrorResponse>> {
+    // リクエスト処理とレスポンス返却のみ
+    // ビジネスロジックはサービス層に委譲
+
+    let session_id = cookies.get("session").map(|cookie| cookie.value());
+
+    match session_service.increment_session(session_id).await {
+        Ok(session_response) => {
+            // 新規セッションの場合はクッキーを設定（サービス層から受け取った情報を使用）
+            if let Some(expiration) = session_response.expiration {
+                set_session_cookie(cookies, &session_response.session_id, expiration);
+            }
+
+            Ok(Json(Response {
+                message: session_response.message,
+                result: SessionCount {
+                    count: session_response.count,
+                },
+            }))
+        }
+        Err(e) => Err(Json(ErrorResponse {
+            error: format!("Failed to increment session: {e:?}"),
+        })),
+    }
+}
+
+
+/// PUT /session - RedisからMySQLへのセッションデータ同期
+#[put("/session")]
+pub async fn sync_sessions(
+    sync_service: &State<Arc<SyncService>>,
+) -> Result<Json<Response<String>>, Json<ErrorResponse>> {
+    // ビジネスロジックはサービス層に委譲
+
+    match sync_service.sync_sessions_to_database().await {
+        Ok(sync_result) => Ok(Json(Response {
+            message: sync_result.message,
+            result: if sync_result.success {
+                "Success".to_string()
+            } else {
+                "Failed".to_string()
+            },
+        })),
+        Err(e) => Err(Json(ErrorResponse {
+            error: format!("Failed to sync sessions: {e:?}"),
+        })),
+    }
+}
+
+/// GET /session_counter - セッションカウンタのサマリを取得
+#[get("/session_counter?<date_range..>")]
+pub async fn get_session_counter(
+    counter_repo: &State<Arc<dyn SessionCounterRepository>>,
+    date_range: Option<DateRange>,
+) -> Result<Json<Response<SessionCounterSummary>>, Json<ErrorResponse>> {
+    get_session_counter_impl(counter_repo, date_range).await
+}
+
+
+// 共通実装
+async fn get_session_counter_impl(
+    counter_repo: &State<Arc<dyn SessionCounterRepository>>,
+    date_range: Option<DateRange>,
+) -> Result<Json<Response<SessionCounterSummary>>, Json<ErrorResponse>> {
+    let date_range = get_date_range_local(date_range);
+
+    // 指定期間の合計を取得
+    let sum_count = counter_repo
+        .sum_count_between(date_range.start_date, date_range.end_date)
+        .await
+        .map_err(|e| {
+            Json(ErrorResponse {
+                error: format!("Failed to get count summary: {e:?}"),
+            })
+        })?;
+
+    let res = Response {
+        message: "指定期間のクリック数を取得しました".to_string(),
+        result: SessionCounterSummary {
+            sum_count,
+        },
+    };
+    Ok(Json(res))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_session_counter_response_structure() {
+        // Test that SessionCount can be created
+        let session_count = SessionCount { count: 42 };
+        assert_eq!(session_count.count, 42);
+
+        // Test SessionCounterSummary structure
+        let summary = SessionCounterSummary {
+            sum_count: 1000,
+        };
+        assert_eq!(summary.sum_count, 1000);
+    }
+
+    #[test]
+    fn test_session_counter_endpoint_params() {
+        // Test that the endpoint accepts correct parameters
+        use crate::DateRange;
+
+        // Test optional DateRange handling
+        let date_range: Option<DateRange> = None;
+        let processed_range = get_date_range_local(date_range);
+
+        // Should return a valid date range structure
+        assert!(processed_range.start_date <= processed_range.end_date);
+    }
+
+    #[test]
+    fn test_error_response_structure() {
+        // Test ErrorResponse creation
+        let error = ErrorResponse {
+            error: "Test error message".to_string(),
+        };
+        assert_eq!(error.error, "Test error message");
+    }
+
+    #[test]
+    fn test_response_structure() {
+        // Test generic Response wrapper
+        let response = Response {
+            message: "Test message".to_string(),
+            result: SessionCount { count: 5 },
+        };
+
+        assert_eq!(response.message, "Test message");
+        assert_eq!(response.result.count, 5);
+    }
+
+    #[test]
+    fn test_session_counter_summary_serialization() {
+        // Test that SessionCounterSummary serializes sum_count as a number
+        let summary = SessionCounterSummary {
+            sum_count: 56,
+        };
+        
+        // Verify the value is numeric (not a string)
+        assert_eq!(summary.sum_count, 56i64);
+        
+        // When serialized to JSON, it should be a number, not a string
+        let response = Response {
+            message: "指定期間のクリック数を取得しました".to_string(),
+            result: summary,
+        };
+        
+        // This test confirms that sum_count is an i64, which will serialize as a JSON number
+        assert_eq!(response.result.sum_count, 56);
+    }
+
+    #[test]
+    fn test_session_counter_summary_with_zero() {
+        // Test that SessionCounterSummary handles zero values correctly
+        let summary = SessionCounterSummary {
+            sum_count: 0,
+        };
+        
+        assert_eq!(summary.sum_count, 0i64);
+        
+        let response = Response {
+            message: "指定期間のクリック数を取得しました".to_string(),
+            result: summary,
+        };
+        
+        assert_eq!(response.result.sum_count, 0);
+    }
+
+    #[test]
+    fn test_session_counter_summary_with_large_numbers() {
+        // Test that SessionCounterSummary handles large numbers correctly
+        let summary = SessionCounterSummary {
+            sum_count: 9_999_999_999,
+        };
+        
+        assert_eq!(summary.sum_count, 9_999_999_999i64);
+        
+        let response = Response {
+            message: "指定期間のクリック数を取得しました".to_string(),
+            result: summary,
+        };
+        
+        assert_eq!(response.result.sum_count, 9_999_999_999);
+    }
+}
