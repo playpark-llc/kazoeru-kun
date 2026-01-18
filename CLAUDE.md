@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Kazoeru-kun (カウントくん) is a click counter application with a Rust-based microservices architecture.
+Kazoeru-kun (カゾエルくん) is a click counter application with a Rust-based microservices architecture.
 
 - **Backend**: Rust with Rocket framework
 - **Frontend**: Rust with Yew framework (WebAssembly)
