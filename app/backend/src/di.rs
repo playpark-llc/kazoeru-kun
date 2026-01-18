@@ -115,10 +115,10 @@ async fn create_database_connection(url: &str) -> Result<DatabaseConnection, sea
         // コネクションプール設定
         .max_connections(100)
         .min_connections(5)
-        .connect_timeout(Duration::from_secs(8))
-        .acquire_timeout(Duration::from_secs(8))
-        .idle_timeout(Duration::from_secs(8))
-        .max_lifetime(Duration::from_secs(8))
+        .connect_timeout(Duration::from_secs(30))
+        .acquire_timeout(Duration::from_secs(30))
+        .idle_timeout(Duration::from_secs(300))
+        .max_lifetime(Duration::from_secs(1800))
         // SQLxログを無効化
         .sqlx_logging(false);
 
