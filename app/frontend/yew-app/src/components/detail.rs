@@ -166,7 +166,7 @@ pub fn Detail() -> Html {
                                     <div class="absolute bottom-0 right-0 w-full h-full bg-[#6184C6] rounded translate-x-1 translate-y-1"></div>
                                 </div>
                             </a>
-                            <a href="https://docs.google.com/forms/d/e/1FAIpQLSdLGxR5WyiUXXVTXl_RLF-NvEDRrMtLdGftFRD6urhvRtNSuQ/viewform?usp=dialog" class="block">
+                            <a href="https://docs.google.com/forms/d/e/1FAIpQLSdLGxR5WyiUXXVTXl_RLF-NvEDRrMtLdGftFRD6urhvRtNSuQ/viewform?usp=dialog" class="block" about="_blank">
                                 <div class="relative w-full">
                                     <button class="w-full flex items-center justify-between rounded bg-white px-5 py-3 text-[#6184C6] shadow-md relative z-10 gap-4 border border-[#6184C6]">
                                         <div class="size-6"></div>
@@ -246,7 +246,7 @@ pub fn Detail() -> Html {
                 </div>
                 <div class="w-full lg:w-1/2 h-screen lg:h-5/6 lg:px-1 bg-[#F5BED3] lg:rounded-lg relative">
                     <div class="justify-end items-center py-2 pr-4 text-white h-[60px] hidden lg:flex">
-                        <span class="text-[18px] tracking-widest">{"MENU"}</span>
+                        <span class="text-[18px] tracking-widest lg:hidden">{"MENU"}</span>
                     </div>
                     <div class="flex justify-end items-center py-2 pr-4 text-white h-[60px] lg:hidden" onclick={ toggle_menu.clone() }>
                         <span class="text-[18px] tracking-widest">{"MENU"}</span>
