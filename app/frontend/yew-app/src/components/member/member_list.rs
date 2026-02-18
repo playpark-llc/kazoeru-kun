@@ -95,7 +95,7 @@ pub fn MemberList() -> Html {
             </section>
 
             <footer class="bg-pink-200 p-4 text-center text-white">
-                <span>{"@yayoyoroz"}</span>
+                <span>{"@yaoyoroz"}</span>
             </footer>
         </div>
     }
