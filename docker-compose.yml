@@ -46,7 +46,7 @@ services:
     restart: always
     environment:
       - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-admin_password}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-CHANGEME_LOCAL_DB_PASSWORD}
       - POSTGRES_DB=kazoerukun
       - TZ=Asia/Tokyo
     volumes:
