@@ -1,4 +1,4 @@
-FROM rust:1.82.0-slim
+FROM rust:1.99.1-slim
 
 WORKDIR /opt/app/frontend/yew-app
 
