@@ -1,6 +1,6 @@
 {
   "dependencies": {
-    "tailwindcss": "^3.4.3"
+    "tailwindcss": "^4.3.5"
   },
   "scripts": {
     "dev": "npm run dev:css & npm run dev:serve",
