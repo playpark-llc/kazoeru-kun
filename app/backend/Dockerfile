@@ -1,7 +1,7 @@
 # ======================================
 # Development Dockerfile with hot reload
 # ======================================
-FROM rust:1.88.0-slim-bullseye
+FROM rust:1.98.0-slim-bullseye
 
 # Install build dependencies and development tools
 RUN apt-get update && \
